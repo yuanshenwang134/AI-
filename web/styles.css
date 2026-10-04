@@ -1,0 +1,323 @@
+/* ==========================================================================
+   AI 篮球分析软件 —— 全局样式
+   设计口径：深色顶栏 + 浅色内容区；卡片式信息分组；ECharts 用统一浅色主题。
+   ========================================================================== */
+:root {
+  --nav-h: 58px;
+  --dark: #16202c;
+  --dark-2: #1f2d3d;
+  --ink: #1f2937;
+  --ink-2: #4b5563;
+  --ink-3: #8b95a3;
+  --line: #e6eaf0;
+  --bg: #f4f6fa;
+  --card: #ffffff;
+  --home: #2f6fed;   /* 主队主题色 */
+  --away: #f2762e;   /* 客队主题色 */
+  --made: #22a06b;   /* 命中 */
+  --miss: #e5484d;   /* 未中 */
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+[v-cloak] { display: none; }
+a { text-decoration: none; color: inherit; }
+code {
+  background: #eef1f6; padding: 1px 5px; border-radius: 4px;
+  font-family: Consolas, Monaco, monospace; font-size: 12px; color: #35404f;
+}
+
+/* ---------------- 顶栏 ---------------- */
+.topbar {
+  height: var(--nav-h); background: var(--dark); color: #e8eef6;
+  display: flex; align-items: center; gap: 18px; padding: 0 16px;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 10px rgba(15, 25, 40, .18);
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 210px; }
+.brand .logo { font-size: 22px; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.25; }
+.brand-text b { font-size: 15px; letter-spacing: .5px; }
+.brand-text small { color: #93a3b8; font-size: 11px; }
+.topnav { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
+.topnav-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 8px; color: #b9c6d6; font-size: 13px;
+  white-space: nowrap; transition: all .15s;
+}
+.topnav-item:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.topnav-item.active { background: var(--home); color: #fff; font-weight: 600; }
+.topnav-item .ico { font-size: 14px; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+
+/* ---------------- 降级提示条 ---------------- */
+.degrade-bar {
+  background: #fff7e6; color: #8a5a00; border-bottom: 1px solid #ffe1a8;
+  padding: 8px 16px; font-size: 12.5px; line-height: 1.7;
+}
+.degrade-bar code { background: #fff0d1; color: #7a4d00; }
+
+/* ---------------- 布局 ---------------- */
+.layout { display: flex; align-items: flex-start; gap: 0; }
+.sidebar {
+  width: 196px; flex: 0 0 196px; background: var(--dark-2);
+  min-height: calc(100vh - var(--nav-h)); padding: 12px 10px 20px;
+  position: sticky; top: var(--nav-h);
+}
+.side-sec {
+  color: #7d8ea4; font-size: 11px; letter-spacing: 1px;
+  padding: 12px 8px 6px; text-transform: uppercase;
+}
+.side-item {
+  display: flex; align-items: center; gap: 9px; padding: 9px 10px;
+  border-radius: 8px; color: #c2cfdd; font-size: 13.5px; margin-bottom: 2px;
+  transition: all .15s;
+}
+.side-item:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.side-item.active { background: rgba(47, 111, 237, .22); color: #fff; font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--home); }
+.side-item .ico { width: 16px; text-align: center; }
+.side-card {
+  margin-top: 16px; background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; padding: 10px;
+}
+.side-card-title { color: #8fa0b6; font-size: 11px; margin-bottom: 8px; letter-spacing: .5px; }
+.side-card-score { display: flex; flex-direction: column; gap: 4px; }
+.side-card-score > div { display: flex; justify-content: space-between; color: #dbe5f0; font-size: 13px; }
+.side-card-score span { font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+.side-card-meta { color: #8496ab; font-size: 11.5px; margin-top: 7px; line-height: 1.6; }
+
+.content { flex: 1; padding: 16px 18px 40px; min-width: 0; }
+
+/* ---------------- 通用卡片 / 栅格 ---------------- */
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; margin-bottom: 14px;
+  box-shadow: 0 1px 3px rgba(22, 32, 44, .05);
+}
+.card-title {
+  font-size: 14px; font-weight: 700; margin: 0 0 12px; color: var(--ink);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.card-title .sub { font-weight: 400; color: var(--ink-3); font-size: 12px; }
+.card-title .grow { flex: 1; }
+.grid { display: grid; gap: 14px; }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-court { grid-template-columns: minmax(420px, 1.35fr) minmax(320px, 1fr); }
+@media (max-width: 1180px) {
+  .grid-2, .grid-3, .grid-4, .grid-court { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { display: none; }
+}
+.muted { color: var(--ink-3); }
+.mono { font-family: Consolas, Monaco, monospace; font-variant-numeric: tabular-nums; }
+.hint { color: var(--ink-3); font-size: 12px; line-height: 1.7; }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.spacer { flex: 1; }
+
+/* ---------------- 比分牌 ---------------- */
+.scoreboard {
+  display: flex; align-items: stretch; gap: 12px;
+  background: linear-gradient(135deg, #1b2839, #25384f);
+  border-radius: 12px; padding: 16px 18px; color: #fff;
+}
+.scoreboard .team { flex: 1; text-align: center; }
+.scoreboard .team .nm { font-size: 14px; color: #a9bdd4; margin-bottom: 4px; }
+.scoreboard .team .pts { font-size: 44px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.scoreboard .team.home .pts { color: #7fb0ff; }
+.scoreboard .team.away .pts { color: #ffb37f; }
+.scoreboard .team .meta { font-size: 12px; color: #9db0c6; margin-top: 8px; line-height: 1.7; }
+.scoreboard .mid { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 110px; }
+.scoreboard .mid .vs { font-size: 12px; color: #8ea3ba; letter-spacing: 2px; }
+.scoreboard .mid .win { font-size: 12.5px; color: #ffd66b; font-weight: 600; }
+
+/* 关键指标小卡 */
+.kpi { background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.kpi .k { font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
+.kpi .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi .d { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+.kpi.home .v { color: var(--home); }
+.kpi.away .v { color: var(--away); }
+
+/* 命中率条（对比双方） */
+.pctbar { height: 8px; border-radius: 4px; background: #eef1f6; overflow: hidden; display: flex; }
+.pctbar i { display: block; height: 100%; }
+.pctbar .h { background: var(--home); }
+.pctbar .a { background: var(--away); }
+
+/* ---------------- 时间轴 ---------------- */
+.timeline { max-height: 430px; overflow-y: auto; padding-right: 4px; }
+.tl-row {
+  display: grid; grid-template-columns: 52px 96px 1fr auto; gap: 8px;
+  align-items: center; padding: 7px 9px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; font-size: 13px;
+}
+.tl-row:hover { background: #f4f7fc; }
+.tl-row.active { background: #eef4ff; border-color: #c7dbff; }
+.tl-row .t { color: var(--ink-3); font-family: Consolas, monospace; font-size: 12px; }
+.tl-row .pl { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-badge {
+  display: inline-block; min-width: 34px; text-align: center; padding: 1px 6px;
+  border-radius: 5px; font-size: 11.5px; font-weight: 700; color: #fff;
+}
+.tl-badge.made { background: var(--made); color: #052719; }
+.tl-badge.miss { background: #c9ced6; color: #3a424e; }
+.tl-badge.h { background: var(--home); }
+.tl-badge.a { background: var(--away); color: #1f2937; }
+.tl-badge.needs { background: #fff; border: 1px solid #f5a623; color: #8a5a00; }
+
+/* ---------------- 球场容器 ---------------- */
+.court-wrap { position: relative; width: 100%; }
+.court-svg { display: block; width: 100%; height: auto; }
+.court-wrap .echarts-overlay { position: absolute; inset: 0; }
+.court-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+.legend .ring { background: transparent; border: 2px solid var(--miss); }
+.legend .dot { background: var(--made); }
+
+/* ---------------- 标球场：左右两个画面（各标一个半场） ----------------
+   用户实测反馈："只能在一个画面里点，想点完所有点根本不显示" ——
+   一个镜头里只看得见半场。这里把场地分成左右两个画面并排，各自标各自的点。
+   当前要点的那个画面高亮（蓝框 + 亮底），另一个淡着，避免点错画面。 */
+.mf-panels { display: flex; gap: 12px; align-items: flex-start; width: 100%; }
+.mf-panels > .mf-panel-wrap { flex: 1 1 0; min-width: 0; max-width: 50%; }
+.mf-panel-wrap { border: 2px solid transparent; border-radius: 8px; }
+.mf-panel-wrap.on { border-color: #409eff; background: #f2f8ff; }
+.mf-panel-head {
+  flex: 1 1 260px; min-width: 260px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.mf-panel-head.on { border-color: #409eff; background: #f2f8ff; }
+.mf-badge {
+  position: absolute; left: 8px; top: 8px; z-index: 3;
+  padding: 2px 8px; border-radius: 10px; font-size: 12px;
+  background: rgba(0, 0, 0, .6); color: #fff;
+}
+
+/* ---------------- 复核页 ---------------- */
+.rev-row {
+  display: grid; grid-template-columns: 120px 1fr 128px 110px 250px;
+  gap: 12px; align-items: center; padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.rev-row:last-child { border-bottom: none; }
+.rev-row:hover { background: #fafbfe; }
+.rev-head { font-size: 12px; color: var(--ink-3); background: #f8fafc; font-weight: 600; }
+.rev-thumb { width: 118px; height: 82px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcfe; }
+.conf-bar { height: 6px; border-radius: 3px; background: #eef1f6; overflow: hidden; margin-top: 4px; }
+.conf-bar i { display: block; height: 100%; background: #f5a623; }
+@media (max-width: 1100px) {
+  .rev-row { grid-template-columns: 1fr; }
+  .rev-thumb { width: 100%; height: 120px; }
+}
+
+/* ---------------- 高光 ---------------- */
+.clip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.clip { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.clip .thumb {
+  height: 132px; background: linear-gradient(135deg, #222f3f, #37475c); color: #cfe0f5;
+  display: flex; align-items: center; justify-content: center; font-size: 30px; cursor: pointer;
+  position: relative;
+}
+.clip .thumb .lab { position: absolute; right: 8px; bottom: 6px; font-size: 12px; color: #fff; }
+.clip video { width: 100%; display: block; background: #000; max-height: 260px; }
+.clip .body { padding: 10px 12px; }
+.clip .body .ttl { font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }
+.clip .body .mt { font-size: 12px; color: var(--ink-3); line-height: 1.7; }
+
+/* ---------------- 战报 markdown ---------------- */
+.md { line-height: 1.85; font-size: 14px; color: #26303d; }
+.md h1 { font-size: 21px; border-bottom: 2px solid #1f2d3d; padding-bottom: 8px; margin: 4px 0 16px; }
+.md h2 { font-size: 16.5px; margin: 22px 0 10px; padding-left: 10px; border-left: 4px solid var(--home); }
+.md h3 { font-size: 14.5px; margin: 16px 0 8px; }
+.md table { border-collapse: collapse; width: 100%; margin: 10px 0 16px; font-size: 13px; }
+.md th, .md td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; }
+.md th { background: #f6f8fb; font-weight: 600; }
+.md tr:nth-child(even) td { background: #fcfdff; }
+.md ul { padding-left: 22px; }
+.md li { margin: 4px 0; }
+.md hr { border: none; border-top: 1px dashed var(--line); margin: 18px 0; }
+.md strong { color: #101a26; }
+.md em { color: var(--ink-3); }
+
+/* ---------------- 上传页 ---------------- */
+.src-card {
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; cursor: pointer;
+  transition: all .15s; background: #fff;
+}
+.src-card:hover { border-color: #b9cdf0; background: #fafcff; }
+.src-card.active { border-color: var(--home); background: #f3f8ff; box-shadow: 0 0 0 2px rgba(47, 111, 237, .12); }
+.src-card .t { font-weight: 600; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+.src-card .d { font-size: 12px; color: var(--ink-3); line-height: 1.7; }
+.progress-box { background: #f8fafc; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.stage-log { font-family: Consolas, Monaco, monospace; font-size: 12px; color: var(--ink-2);
+  max-height: 190px; overflow-y: auto; background: #fff; border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; line-height: 1.8; }
+
+/* Element Plus 微调：让表格更紧凑、卡片更贴合整体风格 */
+.el-table { font-size: 13px; }
+.el-card { border-radius: 12px; }
+.el-descriptions__label { color: var(--ink-3) !important; }
+
+/* ==========================================================================
+   战术分析页
+   --------------------------------------------------------------------------
+   两块叠加的 SVG 必须**严格对齐**：球场层（court.js 生成）和球员层
+   （tacticsPlayersLayer 生成）用的是同一个 viewBox，
+   所以只要容器尺寸一致、绝对定位铺满，就能像素级重合。
+   ========================================================================== */
+.kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 14px; }
+@media (max-width: 1200px) { .kpi-row { grid-template-columns: repeat(3, 1fr); } }
+
+.blk { margin-bottom: 14px; }
+.blk-title { font-weight: 600; margin-bottom: 8px; color: var(--ink); }
+.tag-gap { margin: 0 6px 4px 0; }
+
+/* 俯视战术图：左图右文 */
+.tac-grid { display: grid; grid-template-columns: minmax(320px, 1.15fr) minmax(260px, 1fr); gap: 16px; }
+@media (max-width: 1000px) { .tac-grid { grid-template-columns: 1fr; } }
+
+.tac-overlay { position: absolute; inset: 0; }
+.tac-overlay svg { width: 100%; height: 100%; display: block; }
+
+.playbar { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.playbar-slider { flex: 1 1 160px; min-width: 140px; margin: 0 4px; }
+
+.insight-list { list-style: none; margin: 0; padding: 0; }
+.insight-list li { padding: 6px 0; border-bottom: 1px dashed var(--line); font-size: 13px; line-height: 1.6; }
+.insight-list li:last-child { border-bottom: none; }
+.insight-list a { color: var(--home); font-weight: 600; margin-right: 6px; font-variant-numeric: tabular-nums; }
+
+/* 传球网络：球网 + 连线表 */
+.tac-net { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.tac-net .court-wrap { flex: 1 1 380px; max-width: 520px; }
+
+/* 阵型时间轴 */
+.bar-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.bar-label { flex: 0 0 108px; font-size: 12px; color: var(--ink-2); text-align: right; }
+.bar-track { flex: 1 1 auto; display: block; height: 18px; background: #f1f5f9;
+  border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+.bar-track svg.formation-bar { width: 100%; height: 100%; display: block; }
+
+.small { font-size: 12px; line-height: 1.8; }
+
+/* ---- 首页的模块入口卡片（home.js）----
+   用户反馈：打开网页先看到一大片空白、不知道点哪里。首页给"这是什么 + 从哪开始 + 有哪些模块"。
+   卡片整块可点（<a>），hover 抬一下，避免看起来像纯文本。 */
+.home-card { display: block; text-decoration: none; color: inherit;
+  background: #f8fafc; border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; transition: box-shadow .15s, transform .15s, border-color .15s; }
+.home-card:hover { border-color: var(--home); box-shadow: 0 3px 10px rgba(47, 111, 237, .12);
+  transform: translateY(-1px); }
+.home-card-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.home-card-ico { font-size: 17px; line-height: 1; }
+.home-card-desc { color: var(--ink-3); font-size: 12px; line-height: 1.7; margin-top: 6px; }

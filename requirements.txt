@@ -1,0 +1,7 @@
+# 套餐 A 运行所需的最小依赖（必装）
+# 只装这些就能：跑合成 demo、跑计分规则引擎、跑统计/热区/战报、启动 Web 服务
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.5
+pytest>=7.4
+httpx>=0.26          # FastAPI TestClient 用

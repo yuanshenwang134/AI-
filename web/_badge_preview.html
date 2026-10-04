@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>徽章配色视觉确认 · 待确认 vs 未中</title>
+<link rel="stylesheet" href="styles.css?v=20260926-readable">
+<style>
+  body { background: var(--bg); padding: 24px 28px 60px; font-family: system-ui, "Segoe UI", "Microsoft YaHei", sans-serif; }
+  h1 { font-size: 19px; margin: 0 0 4px; color: var(--ink); }
+  h2 { font-size: 14px; margin: 26px 0 8px; color: var(--ink); }
+  .note { font-size: 12.5px; color: var(--ink-2); line-height: 1.7; }
+  .card2 { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-top: 8px; }
+  .demo-row { display: grid; grid-template-columns: 62px 1fr auto; gap: 8px; align-items: center;
+              padding: 7px 9px; border-radius: 8px; font-size: 13px; }
+  .demo-row:hover { background: #f4f7fc; }
+  .zoom { transform: scale(2); transform-origin: left center; margin: 0 0 0 6px; }
+  .num { font-family: Consolas, monospace; font-size: 12px; color: var(--ink-3); }
+  .bad { color: #b3261e; font-weight: 700; }
+  .ok { color: #1a7f55; font-weight: 700; }
+  table { border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  td, th { border: 1px solid var(--line); padding: 5px 9px; text-align: left; }
+  th { background: #f7f9fc; color: var(--ink-2); font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>徽章配色视觉确认</h1>
+<p class="note">
+  用的就是应用里的真实样式（<code>web/styles.css</code> 的 <code>.tl-badge</code>）。
+  重点看两件事：<b>待确认徽章上的字清不清楚</b>、<b>待确认和未中一眼能不能分开</b>。
+  每一行左边是原始大小，右边是放大 2 倍。数字是用 WCAG 公式算出来的对比度
+  （11.5px 加粗属于小字号，AA 要求 ≥ 4.5:1）。
+</p>
+
+<h2>① 当前实现（已采用方案 B：白底 + 橙框 + 深橙字）</h2>
+<div class="card2">
+  <div class="demo-row">
+    <span class="t">0:03</span>
+    <span><span class="tl-badge h">主队</span>
+      <span class="tl-badge made" style="margin-left:4px">+2</span></span>
+    <span class="num">命中 4.81:1</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:07</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge miss" style="margin-left:4px">未中</span></span>
+    <span class="num">未中 6.42:1</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:11</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge needs" style="margin-left:4px">待确认</span></span>
+    <span class="num ok">待确认 5.93:1 ✓（已采用方案 B）</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:11</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge" style="background:#f5a623;color:#fff;margin-left:4px">待确认</span></span>
+    <span class="num bad">旧样式（已弃用）2.03:1</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:15</span>
+    <span><span class="tl-badge h">主队</span>
+      <span class="tl-badge made zoom">+3</span></span>
+    <span class="num">放大 2×（命中）</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:19</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge needs zoom">待确认</span></span>
+    <span class="num">放大 2×（待确认）</span>
+  </div>
+</div>
+
+<h2>② 方案 A：待确认改深色字（橙底不变）</h2>
+<div class="card2">
+  <div class="demo-row">
+    <span class="t">0:11</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge needs" style="color:#1f2937;margin-left:4px">待确认</span></span>
+    <span class="num ok">7.24:1 ← AA 通过</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:19</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge needs zoom" style="color:#1f2937">待确认</span></span>
+    <span class="num">放大 2×</span>
+  </div>
+</div>
+
+<h2>③ 方案 B（<span class="ok">已采用</span>）：待确认改描边样式（白底 + 橙框 + 深橙字）</h2>
+<div class="card2">
+  <div class="demo-row">
+    <span class="t">0:11</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge" style="background:#fff;color:#8a5a00;border:1px solid #f5a623;margin-left:4px">待确认</span></span>
+    <span class="num ok">5.93:1 ← AA 通过，且不再与客队橙撞色</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:19</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge zoom" style="background:#fff;color:#8a5a00;border:1px solid #f5a623">待确认</span></span>
+    <span class="num">放大 2×</span>
+  </div>
+</div>
+
+<h2>④ 方案 C：三态统一深色字（命中/未中/待确认一起调）</h2>
+<div class="card2">
+  <div class="demo-row">
+    <span class="t">0:03</span>
+    <span><span class="tl-badge h">主队</span>
+      <span class="tl-badge made" style="color:#06301f;margin-left:4px">+2</span></span>
+    <span class="num">命中 4.35:1（仍差一点，要更绿才够 4.5）</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:07</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge miss" style="color:#3a424e;margin-left:4px">未中</span></span>
+    <span class="num ok">未中 6.42:1</span>
+  </div>
+  <div class="demo-row">
+    <span class="t">0:11</span>
+    <span><span class="tl-badge a">客队</span>
+      <span class="tl-badge needs" style="color:#1f2937;margin-left:4px">待确认</span></span>
+    <span class="num ok">待确认 7.24:1</span>
+  </div>
+</div>
+
+<h2>测得的数字</h2>
+<table>
+  <tr><th>徽章</th><th>文字 / 底色</th><th>对比度</th><th>AA(4.5:1)</th></tr>
+  <tr><td>命中 made</td><td>#052719 / #22a06b</td><td>4.81:1</td><td>通过</td></tr>
+  <tr><td>未中 miss</td><td>#3a424e / #c9ced6</td><td>6.42:1</td><td>通过</td></tr>
+  <tr><td><b>待确认 needs（现行）</b></td><td>#8a5a00 / #ffffff（橙框 #f5a623）</td><td><b class="ok">5.93:1</b></td><td><b>通过</b></td></tr>
+  <tr><td>待确认（旧样式，已弃用）</td><td>#ffffff / #f5a623</td><td class="bad">2.03:1</td><td>未达</td></tr>
+  <tr><td>主队 h</td><td>#ffffff / #2f6fed</td><td>4.55:1</td><td>通过</td></tr>
+  <tr><td>客队 a</td><td>#1f2937 / #f2762e</td><td>5.18:1</td><td>通过</td></tr>
+</table>
+<p class="note" style="margin-top:10px">
+  底色之间的色差（CIEDE2000）：待确认 vs 未中 <b>34.1</b>（好区分）；
+  旧样式下 <b>待确认 vs 客队只有 18.3</b> —— 两者都是实心橙、同一行相邻，
+  这是"待确认"最容易被误读成队别的地方。改用描边（白底）后，底色与客队橙的
+  RGB 距离从约 49 拉到 250，撞色问题消失。
+</p>
+</body>
+</html>

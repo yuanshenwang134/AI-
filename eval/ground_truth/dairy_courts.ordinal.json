@@ -1,0 +1,13 @@
+{
+  "video": "dairy_courts.mov",
+  "source": "用户在开发过程中核对原片后确认：三次出手全部命中（记录见 HANDOVER.md 与 README.md 的素材表）",
+  "annotation_type": "ordinal_results_without_timestamps",
+  "shot_count": 3,
+  "same_shooter": null,
+  "shots": [
+    {"shot_no": 1, "result": "make", "shooter": null, "release_s": null, "rim_s": null},
+    {"shot_no": 2, "result": "make", "shooter": null, "release_s": null, "rim_s": null},
+    {"shot_no": 3, "result": "make", "shooter": null, "release_s": null, "rim_s": null}
+  ],
+  "notes": "人工确认的是进球结果，没有人提供离手/到筐秒数，因此 release_s 与 rim_s 一律留空，不拿软件输出的时间去补。投篮者身份未单独向人工确认（画面为单人半场练习，软件三次都归到同一个球员 ID）。"
+}

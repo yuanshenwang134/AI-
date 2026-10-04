@@ -1,0 +1,18 @@
+{
+  "video": "fixedcam_shooting_960x540_7shots.mp4",
+  "source": "用户在当前任务中逐球核对原片后提供",
+  "annotation_type": "ordinal_results_without_timestamps",
+  "shot_count": 7,
+  "same_shooter": true,
+  "shooter": "A",
+  "shots": [
+    {"shot_no": 1, "result": "miss", "shooter": "A", "release_s": null},
+    {"shot_no": 2, "result": "make", "shooter": "A", "release_s": null},
+    {"shot_no": 3, "result": "miss", "shooter": "A", "release_s": null},
+    {"shot_no": 4, "result": "miss", "shooter": "A", "release_s": null},
+    {"shot_no": 5, "result": "miss", "shooter": "A", "release_s": null},
+    {"shot_no": 6, "result": "make", "shooter": "A", "release_s": null},
+    {"shot_no": 7, "result": "make", "shooter": "A", "release_s": null}
+  ],
+  "notes": "只有顺序、结果及同一球员身份获得人工确认；不得把模型 release_t 充作人工时间。当前 eval_vs_truth.py 需要时间标注，因此此文件独立保存，暂不用于时间匹配指标。"
+}

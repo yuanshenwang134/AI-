@@ -1,0 +1,37 @@
+# ==========================================================================
+# .gitattributes —— 统一换行符，避免 Windows/macOS/Linux 协作时整文件 diff
+# ==========================================================================
+
+# 默认按文本处理，仓库里统一用 LF
+* text=auto
+
+# 明确指定类型的换行符
+*.py    text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.txt   text eol=lf
+*.csv   text eol=lf
+
+# Windows 脚本保持 CRLF；且带 BOM 的 .ps1 不要被改（PowerShell 5.1 读 BOM 才不认错中文）
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# 二进制：别做任何转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.mp4   binary
+*.avi   binary
+*.npz   binary
+*.pt    binary
+*.pth   binary
+*.onnx  binary
+*.exe   binary
+*.whl   binary
+
+# 让 GitHub 不要把 vendored 前端算进语言统计（否则仓库看起来全是 JS）
+web/vendor/* linguist-vendored

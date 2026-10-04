@@ -1,0 +1,14 @@
+{
+  "video": "night_outdoor_arifjan_32s.mp4",
+  "source": "用户在当前任务中提供：看不清，进，进，进",
+  "annotation_type": "ordinal_results_without_timestamps",
+  "shot_count": 4,
+  "same_shooter": null,
+  "shots": [
+    {"shot_no": 1, "result": "unknown", "release_s": null, "rim_s": null},
+    {"shot_no": 2, "result": "make", "release_s": null, "rim_s": null},
+    {"shot_no": 3, "result": "make", "release_s": null, "rim_s": null},
+    {"shot_no": 4, "result": "make", "release_s": null, "rim_s": null}
+  ],
+  "notes": "独立新来源测试，未用于训练。第一球结果看不清，不计入结果一致率分母；未提供时间及球员身份。"
+}

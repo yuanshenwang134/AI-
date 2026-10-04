@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI 篮球分析软件 · 比赛智能分析平台</title>
+
+<!-- ================= 前端依赖：本地优先，CDN 兜底 =================
+     为什么这么写：答辩现场的网络经常不可靠，CDN 一挂就是白屏。
+     先跑 `python scripts/vendor_web.py` 把依赖抓到 web/vendor/，
+     这样断网也能演示；没抓过就自动回退到 CDN。
+     用 document.write 同步注入，保证 script 执行顺序不变。 -->
+<script>
+(function () {
+  // 本地副本是否存在，由同步 XHR 探测（file:// 下同样可用）
+  function has(p) {
+    try {
+      var x = new XMLHttpRequest();
+      x.open('HEAD', p, false);
+      x.send(null);
+      return x.status === 200 || x.status === 0;
+    } catch (e) { return false; }
+  }
+  var LOCAL = './vendor/';
+  var CDN = {
+    vue: 'https://unpkg.com/vue@3/dist/vue.global.prod.js',
+    epCss: 'https://unpkg.com/element-plus/dist/index.css',
+    epJs: 'https://unpkg.com/element-plus/dist/index.full.min.js',
+    epLocale: 'https://unpkg.com/element-plus/dist/locale/zh-cn.min.js',
+    echarts: 'https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js'
+  };
+  var lv = LOCAL + 'vue.global.prod.js';
+  var useLocal = has(lv);
+  window.__DSH_ASSET_MODE = useLocal ? 'local' : 'cdn';
+  function js(src) { document.write('<script src="' + src + '"><\/script>'); }
+  function css(href) { document.write('<link rel="stylesheet" href="' + href + '">'); }
+
+  if (useLocal) {
+    css(LOCAL + 'element-plus.css');
+    js(lv);
+    js(LOCAL + 'element-plus.full.min.js');
+    js(LOCAL + 'element-plus-locale-zh-cn.min.js');
+    js(LOCAL + 'echarts.min.js');
+  } else {
+    css(CDN.epCss);
+    js(CDN.vue);
+    js(CDN.epJs);
+    js(CDN.epLocale);
+    js(CDN.echarts);
+  }
+})();
+</script>
+
+<link rel="stylesheet" href="./styles.css?v=39-sidesel" />
+</head>
+<body>
+<div id="app" v-cloak>
+  <!-- ============ 深色顶栏：数据源状态 + 模式标签 + 任务快照 ============ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🏀</span>
+      <div class="brand-text">
+        <b>AI 篮球分析软件</b>
+        <small>比赛视频 → 比分 / 命中率 / 热区 / 战报</small>
+      </div>
+    </div>
+
+    <!-- 导航统一放在左侧栏（按「首页 / 分析流程 / 结果与产出」分组）。
+         顶栏原来又平铺了一遍同样的菜单，与侧栏重复 —— 用户反馈后已移除。 -->
+
+    <div class="topbar-right">
+      <!-- 后端探测结果：green = 已连后端；orange = 演示数据模式 -->
+      <el-tag :type="state.backendOk ? 'success' : 'warning'" effect="dark" size="small"
+              :title="state.backendOk ? api.base : api.lastError">
+        {{ state.backendOk ? '后端已连接' : '演示数据模式' }}
+      </el-tag>
+      <el-tag v-if="job && job.job_id" type="info" effect="plain" size="small"
+              :title="job.out_dir">
+        任务 {{ String(job.job_id).slice(0, 8) }} · {{ job.status }}
+      </el-tag>
+      <el-button size="small" text style="color:#cbd5e1" @click="probe">重新探测</el-button>
+    </div>
+  </header>
+
+  <!-- ============ 演示数据模式提示条（后端不可用时的优雅降级说明） ============ -->
+  <div v-if="!state.backendOk" class="degrade-bar">
+    <b>演示数据模式</b>：未检测到后端 <code>{{ api.base }}</code>，已自动加载
+    <code>web/demo/game.json</code>、<code>players.json</code>、<code>shotchart.json</code>、<code>report.md</code>。
+    <template v-if="isFileProtocol">
+      当前为 <code>file://</code> 打开，浏览器默认拦截本地文件读取；推荐执行
+      <code>python -m http.server 8080</code> 后访问 <code>http://127.0.0.1:8080/web/</code>，
+      或启动后端 <code>uvicorn aihoop.server:app</code>。
+    </template>
+    <template v-else>
+      启动后端后点击右上角「重新探测」即可切到真实数据（导出/复核等写操作才会生效）。
+    </template>
+  </div>
+
+  <!-- ============ 左侧菜单 + 内容区 ============ -->
+  <div class="layout">
+    <aside class="sidebar">
+      <a v-for="m in menus.filter(x => x.group === 'home')" :key="m.key" :href="'#/' + m.key"
+         :class="['side-item', { active: route === m.key }]">
+        <span class="ico">{{ m.icon }}</span>
+        <span class="txt">{{ m.title }}</span>
+      </a>
+      <div class="side-sec">分析流程</div>
+      <a v-for="m in menus.filter(x => x.group === 'flow')" :key="m.key" :href="'#/' + m.key"
+         :class="['side-item', { active: route === m.key }]">
+        <span class="ico">{{ m.icon }}</span>
+        <span class="txt">{{ m.title }}</span>
+      </a>
+      <div class="side-sec">结果与产出</div>
+      <a v-for="m in menus.filter(x => x.group === 'output')" :key="m.key" :href="'#/' + m.key"
+         :class="['side-item', { active: route === m.key }]">
+        <span class="ico">{{ m.icon }}</span>
+        <span class="txt">{{ m.title }}</span>
+      </a>
+
+      <!-- 当前比赛快照：全站共享 state.game，各页面只读 -->
+      <div class="side-card" v-if="game && game.score">
+        <div class="side-card-title">当前比赛</div>
+        <div class="side-card-score">
+          <div><b>{{ teamName('home') }}</b><span>{{ game.score.home }}</span></div>
+          <div><b>{{ teamName('away') }}</b><span>{{ game.score.away }}</span></div>
+        </div>
+        <div class="side-card-meta">
+          出手 {{ (game.timeline || []).length }} 次 · 待复核
+          {{ (game.needs_review || []).length }} 次
+        </div>
+        <div class="side-card-meta" v-if="state.demoMode">来源：演示数据</div>
+        <div class="side-card-meta" v-else>来源：{{ (game.meta || {}).source }}</div>
+      </div>
+      <div class="side-card" v-else>
+        <div class="side-card-title">暂无数据</div>
+        <div class="side-card-meta">请到「上传与分析」新建任务，或等待演示数据加载。</div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <!-- 每个页面都是 window.PAGES[key] 里的一个组件对象，hash 路由切换 -->
+      <component :is="currentPage" v-if="currentPage"></component>
+      <el-empty v-else description="页面未注册" />
+    </main>
+  </div>
+</div>
+
+<!-- ================= 应用脚本（普通 JS，无打包） ================= -->
+<!-- 顺序：api -> data -> court -> components -> pages -> app -->
+<!--
+  ?v= 是**缓存击穿**用的。踩过的坑：改了 overview.js 之后浏览器还在用缓存的旧版，
+  页面上「证据来源」卡片还是老样子，看着像后端没改 —— 其实是前端根本没换。
+  改前端文件后把下面的 v= 一起 +1，就能保证浏览器一定拿到新代码。
+-->
+<script src="./api.js?v=38-frames-stable"></script>
+<script src="./data.js?v=35-location"></script>
+<script src="./court.js?v=34"></script>
+<script src="./components.js?v=34"></script>
+<script src="./pages/home.js?v=34"></script>
+<script src="./pages/upload.js?v=41-dualpanel-fix"></script>
+<script src="./pages/overview.js?v=36-coverage"></script>
+<script src="./pages/stats.js?v=34"></script>
+<script src="./pages/shotchart.js?v=34"></script>
+<script src="./pages/tactics.js?v=34"></script>
+<script src="./pages/highlights.js?v=37"></script>
+<script src="./pages/report.js?v=35-location"></script>
+<script src="./pages/review.js?v=35-gap-review"></script>
+<script src="./pages/train.js?v=34"></script>
+<script src="./app.js?v=36"></script>
+</body>
+</html>

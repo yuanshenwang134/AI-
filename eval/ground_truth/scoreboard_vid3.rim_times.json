@@ -1,0 +1,13 @@
+{
+  "video": "scoreboard_vid3.mp4",
+  "source": "用户在当前任务中核对原片后提供",
+  "annotation_type": "results_with_approximate_rim_times",
+  "shot_count": 3,
+  "same_shooter": null,
+  "shots": [
+    {"shot_no": 1, "result": "miss", "shooter": null, "release_s": null, "rim_s": 0.5},
+    {"shot_no": 2, "result": "miss", "shooter": null, "release_s": null, "rim_s": 8.0},
+    {"shot_no": 3, "result": "make", "shooter": null, "release_s": null, "rim_s": 29.0}
+  ],
+  "notes": "rim_s 是用户指明的球在篮筐附近、判断进没进的视频时间，属于近似时间，不是出手或离手时间。球员身份未提供。当前 eval_vs_truth.py 按 release_s 匹配，不可直接将这些时间填入 release_s。"
+}

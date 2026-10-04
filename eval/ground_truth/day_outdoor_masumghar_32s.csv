@@ -1,0 +1,4 @@
+video,shot_no,release_s,rim_s,result,shooter,shot_type,note
+day_outdoor_masumghar_32s,1,6.9,8.33,miss,,跳投,球 8.14s 从上方回到画面、8.33s 触筐后向左前弹出，未进网（逐帧判读，置信度中）
+day_outdoor_masumghar_32s,2,11.3,12.45,make,,跳投,高弧度过板后下落，12.42-12.54s 球在筐内、网被撑开，12.6-12.9s 落到网下（置信度中；出手瞬间被篮下人群遮挡，为外推）
+day_outdoor_masumghar_32s,3,25.2,25.53,make,,上篮/补篮,25.53s 球入筐、网鼓起，25.57-25.87s 穿过网下落，26.4s 后篮网回弹（置信度high，近距离可辨）

@@ -1,0 +1,16 @@
+{
+  "video": "nathan_freethrow.mov",
+  "source": "用户在当前任务中核对原片后提供",
+  "annotation_type": "ordinal_results_without_timestamps",
+  "shot_count": 6,
+  "same_shooter": true,
+  "shots": [
+    {"shot_no": 1, "result": "miss", "shooter": "A", "release_s": null, "rim_s": null},
+    {"shot_no": 2, "result": "make", "shooter": "A", "release_s": null, "rim_s": null},
+    {"shot_no": 3, "result": "make", "shooter": "A", "release_s": null, "rim_s": null},
+    {"shot_no": 4, "result": "make", "shooter": "A", "release_s": null, "rim_s": null},
+    {"shot_no": 5, "result": "make", "shooter": "A", "release_s": null, "rim_s": null},
+    {"shot_no": 6, "result": "make", "shooter": "A", "release_s": null, "rim_s": null}
+  ],
+  "notes": "A 是本视频内的同一位投篮者，不代表跨视频身份。未提供人工时间，不能用模型时间补作人工真值。"
+}

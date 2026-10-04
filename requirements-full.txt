@@ -1,0 +1,17 @@
+# 完整推理依赖（真视频端到端，可选）
+# 装完这些才能跑 `python -m aihoop.cli video`
+#
+# 注意：
+#   * 有 NVIDIA GPU 时，先按 https://pytorch.org 的指引装 CUDA 版 torch，
+#     再装 ultralytics，否则默认装的是 CPU 版（也能跑，只是慢 5~20 倍）。
+#   * opencv-python-headless 用于服务器；本机调试可用 opencv-python。
+torch>=2.1
+torchvision>=0.16
+ultralytics>=8.1
+opencv-python>=4.9
+# 可选：高光用 moviepy（不装则用 ffmpeg 命令行，功能一样）
+# moviepy>=1.0.3
+# 可选：单应/数值计算加速（本骨架的 court.py 已用纯 python 实现，可不装）
+# numpy>=1.26
+# 可选：记分牌 OCR
+# paddleocr>=2.7

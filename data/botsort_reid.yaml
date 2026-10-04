@@ -1,0 +1,17 @@
+﻿# BoT-SORT + ReID（用检测器自身特征，无需额外模型）
+# 为什么要开：ByteTrack/无 ReID 的 BoT-SORT 只靠 IoU + 运动关联，
+# 球员一被遮挡换回来就会拿到新 ID —— 实测 15 秒裂出 42 条轨迹（真实 10 人），
+# 传球/控球/阵型全都挂在"球员身份"上，ID 一碎后面全部打折。
+# with_reid: True + model: auto = 复用检测器 backbone 的外观特征，零额外下载。
+tracker_type: botsort
+track_high_thresh: 0.25
+track_low_thresh: 0.10
+new_track_thresh: 0.30      # 提高一点：少开新轨迹，减少碎片
+track_buffer: 60            # 遮挡期间把轨迹留活更久（原 30），遮挡回来还能接上
+match_thresh: 0.80
+fuse_score: True
+gmc_method: sparseOptFlow    # 移动镜头下做全局运动补偿
+proximity_thresh: 0.5
+appearance_thresh: 0.25      # ↓ 比默认 0.8 宽松：远景球员外观差异本来就小
+with_reid: True
+model: auto

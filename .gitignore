@@ -1,0 +1,106 @@
+# ==========================================================================
+# .gitignore —— 这个项目里"很大 / 与机器绑定 / 可重建"的东西都不入库
+# --------------------------------------------------------------------------
+# 为什么要写得这么狠：本机 data/ 有 4.9GB、.venv/ 5.2GB、out/ 483MB、
+# third_party/ 725MB。GitHub 单文件上限 100MB、仓库建议 <1GB ——
+# 不排除的话 push 会被直接拒绝（或者仓库大到没人愿意 clone）。
+#
+# 别人 clone 之后能跑吗？能：
+#   pip install -r requirements.txt
+#   下载 ffmpeg.exe 放到项目根目录（README 有说明）
+#   没有视频/权重时，用 python -m aihoop.cli demo 生成合成数据即可跑通全流程
+# ==========================================================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+pytest-cache-files-*/
+pip-build-tracker-*/
+
+# ---- 运行时数据：视频、任务库、标定、标注、中间产物 ----
+# 视频动辄几百 MB（实测 bili_nybo.mp4 就有 962MB），一律不入库；
+# 需要分享素材请用 GitHub Releases 或网盘，别塞进仓库。
+data/uploads/
+data/torch_whl/
+data/*.mp4
+data/*.avi
+data/*.mov
+data/*.mkv
+data/*.sqlite
+data/jobs.sqlite
+data/calibration.json
+data/calibration_*.json
+data/calibration.backup*.json
+data/marks_*.json
+data/basket_feedback.jsonl
+data/scoreboard_bug.json
+data/scoreboard_bugs/
+# 「手动框选 + OCR」读出的得分事件：按视频存，属于运行时产物（像标定一样）
+data/sb_events_*.json
+# 标定/篮筐标注数据集与打包（每个 15MB 上下，可重新导出）
+data/_calib.zip
+data/calib_ds/
+data/calib_ds_finetune/
+data/rim_ds/
+data/rim_yolo/
+data/ball_ds/
+data/ball_yolo/
+data/_label_clips/
+data/_label_sheets/
+data/*.png
+data/*.jpg
+# 保留目录结构（clone 下来 data/ 不至于不存在）
+!data/.gitkeep
+data/.gitkeep
+
+# ---- 分析产物（可重建：重新跑一次分析就有了）----
+out/
+
+# ---- 开发期的临时目录：诊断脚本、轨迹 dump、连拍图、慢放片段 ----
+# 实测这个目录长到 144MB / 289 个文件，而且全是"看一次就扔"的东西 ——
+# 不排除的话 git add -A 会把它们全部提交（单文件都不到 50MB，push 脚本的大文件
+# 兜底检查拦不住）。要分享其中的看片材料请单独打包，别塞进仓库。
+_tmp/
+
+# ---- 模型权重（可重新训练 / 可从 Releases 下载）----
+*.pt
+*.pth
+*.onnx
+runs/
+weights/
+
+# ---- 第三方参考代码与压缩包（725MB，本机参考用，不入库）----
+third_party/
+
+# ---- 早期试验留下的依赖目录（约 150MB，已无任何代码引用；本机还可能因权限读不了，
+#      会让 git add 直接中断）----
+_pylibs/
+
+# ---- 大体积可执行文件（各人自己下载，README 有链接）----
+ffmpeg.exe
+ffprobe.exe
+yt-dlp.exe
+# 便携版 ffmpeg 装在这里（tools_fetch_ffmpeg.py 一键下载，约 200MB，不入库）
+tools/ffmpeg/
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ==========================================================================
+# 注意：下面这些是**故意提交**的，别误删规则
+#   web/vendor/      约 2.5MB —— 前端依赖本地化，断网也能演示
+#   data/.gitkeep    占位，保证 data/ 目录存在
+#   web/demo/        演示数据（如果存在）—— 前端无后端时的降级演示
+# ==========================================================================
+
+# ---- 从素材裁出来的目视证据图：只在本机用，不入库 ----
+# 来源素材（ShotTracker 等）没有 LICENSE，公开仓库里不该出现；
+# 内容本身仍留在本机，需要看的时候直接打开本地文件。
+eval/review_drafts/

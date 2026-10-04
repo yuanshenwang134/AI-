@@ -1,0 +1,6 @@
+video,shot_no,release_s,rim_s,result,shooter,shot_type,note
+night_outdoor_arifjan_32s,1,5.18,5.5,unknown,,跳投,球从弧顶上方出手后升向左前方，但该机位当时篮筐在画面外，未看到球与筐的关系（置信度低，可删）
+night_outdoor_arifjan_32s,2,11.3,12.85,make,,跳投,球飞行约1.6s后 12.45-12.80s 打在板/筐上、12.85s 穿过网、12.95-13.1s 落到筐下（置信度high）
+night_outdoor_arifjan_32s,3,16.95,17.9,unknown,,补篮/点拨,17.0-17.4s 球在筐左侧近乎垂直上升后被板挡出画面，此后网无扰动、球未再出现（17.9s 为按减速外推的过筐高度时刻，非观测值）
+night_outdoor_arifjan_32s,4,18.3,18.34,make,,补篮,18.37s 球在网内、网明显鼓起，18.55-18.6s 落到网下；出手未拍到（近距离在筐口，被筐沿/板下缘遮挡），18.3s 为估计值（置信度中）
+night_outdoor_arifjan_32s,5,,22.71,make,,跳投,22.667s 球从画面左上高速入镜、22.7s 过筐、22.73-22.83s 在网内并穿网落下，网持续摆动；出手在画面外（机位在替补席/人群中），无法给出 release_s（置信度high）
