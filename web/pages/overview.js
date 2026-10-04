@@ -19,7 +19,11 @@ window.PAGES['overview'] = {
     return {
       S: window.STORE,
       api: window.API,
+<<<<<<< HEAD
       pendingSeek: null,
+=======
+      showVideo: false,
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
       activeRow: -1,
       videoReady: false,
       videoErr: '',
@@ -27,6 +31,7 @@ window.PAGES['overview'] = {
       filterMade: 'all'      // all | made | miss
     };
   },
+<<<<<<< HEAD
   watch: {
     videoUrl: function () {
       this.videoReady = false; this.videoErr = ''; this.pendingSeek = null;
@@ -81,6 +86,10 @@ window.PAGES['overview'] = {
         return (a.matched === b.matched) ? a.release_t - b.release_t : (a.matched ? 1 : -1);
       });
     },
+=======
+  computed: {
+    game: function () { return this.S.game; },
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     duration: function () { return (this.game && this.game.duration) || 0; },
     /**
      * 证据来源：直接读 game.meta，把「这次判定用了哪几路证据、质量如何」
@@ -96,6 +105,7 @@ window.PAGES['overview'] = {
         out.push({ k: '广播比分牌', v: '读取成功 ' + sb.frames_hit + '/' + sb.frames_read +
           ' 帧（' + pct + '%）', d: '比分与得分时刻由它给出（导播系统直接渲染，零噪声）' });
       }
+<<<<<<< HEAD
       if (m.hoopsight_error) {
         out.push({k: '篮下识别未完成', v: '本次结果可能漏球',
           d: m.hoopsight_error + '；请检查篮筐标注与尺寸，不能将本次统计视为完整比赛结果。'});
@@ -107,6 +117,11 @@ window.PAGES['overview'] = {
       var vis = m.visual;
       if (vis) {
         out.push({ k: '视觉路径（球+篮筐）', v: '出手候选 ' + vis.shots + ' 条 / 判进 ' +
+=======
+      var vis = m.visual;
+      if (vis) {
+        out.push({ k: '视觉路径（球+篮筐）', v: '识别出手 ' + vis.shots + ' 次 / 判进 ' +
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
           vis.made + ' 次',
           d: (vis.method || '') + '。判定口径：球在图像里从篮筐平面上方落到下方且穿越点在篮圈内，不需要知道球离地多高' });
         if (vis.hoop_drift_px && Math.max(vis.hoop_drift_px[0], vis.hoop_drift_px[1]) > 6) {
@@ -211,7 +226,11 @@ window.PAGES['overview'] = {
     },
     videoUrl: function () {
       if (!this.S.jobId || this.S.demoMode) return '';
+<<<<<<< HEAD
       return window.API.jobVideoUrl(this.S.jobId);
+=======
+      return window.API.videoUrl(this.S.jobId);
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     },
     /** 时间轴：来自 game.timeline，可按球队/命中与否过滤 */
     timeline: function () {
@@ -219,6 +238,7 @@ window.PAGES['overview'] = {
       var self = this;
       return rows.filter(function (e) {
         if (self.filterTeam !== 'all' && e.team !== self.filterTeam) return false;
+<<<<<<< HEAD
         // 「待确认」的判据与徽章/文案**共用同一个**（`resultClass` → `D.isUnknown`）：
         // 结果未知时 made 是 null，光看 `e.result` 会把"缺 result 但结果为空"的行
         // 漏到"未中"里、同时从"待确认"里漏掉（实测这处边界不一致）。
@@ -226,6 +246,10 @@ window.PAGES['overview'] = {
         if (self.filterMade === 'made' && (!e.made || unknown)) return false;
         if (self.filterMade === 'miss' && (unknown || e.made)) return false;
         if (self.filterMade === 'unknown' && !unknown) return false;
+=======
+        if (self.filterMade === 'made' && !e.made) return false;
+        if (self.filterMade === 'miss' && e.made) return false;
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return true;
       });
     },
@@ -320,6 +344,7 @@ window.PAGES['overview'] = {
   methods: {
     teamName: function (s) { return window.D.teamName(this.game, s); },
     mmss: function (t) { return window.D.mmss(t); },
+<<<<<<< HEAD
     /**
      * 候选层的中文标签：这两个**必须是 methods**（模板里当函数调用）。
      * 之前误放进 computed，模板渲染时 `candidateKindLabel(c.kind)` 会报错 —— 候选卡片整块渲染失败。
@@ -391,6 +416,18 @@ window.PAGES['overview'] = {
     },
     onVideoMeta: function () { this.videoReady = true; this.videoErr = ''; this.seekVideo(); },
     onVideoError: function () { this.videoReady = false; this.videoErr = '原视频暂时无法播放，请检查文件是否仍在原位置，或重新上传兼容的视频。'; },
+=======
+    /** 点击事件行：有视频就 seek，没有视频只高亮 */
+    gotoEvent: function (row, idx) {
+      this.activeRow = idx;
+      var v = this.$refs.video;
+      if (v && this.showVideo) {
+        try { v.currentTime = Math.max(0, Number(row.t) - 0.6); v.play(); } catch (e) {}
+      }
+    },
+    onVideoMeta: function () { this.videoReady = true; this.videoErr = ''; },
+    onVideoError: function () { this.videoErr = '无法加载视频流（/api/games/{id}/video），可能未关联原始视频或浏览器不支持该编码'; },
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     rowClass: function (row) {
       return row.team === 'home' ? 'h' : 'a';
     },
@@ -403,6 +440,7 @@ window.PAGES['overview'] = {
     '  </div>',
 
     '  <template v-else>',
+<<<<<<< HEAD
     "    <div class=\"card\">",
     "      <h3 class=\"card-title\">原始视频 <span class=\"sub\">拖动进度条回看，也可点击下方投篮时间</span></h3>",
     "      <video v-if=\"videoUrl\" :key=\"videoUrl\" ref=\"video\" :src=\"videoUrl\" controls playsinline preload=\"metadata\" style=\"display:block;width:100%;max-height:520px;background:#000;border-radius:10px\" @loadedmetadata=\"onVideoMeta\" @error=\"onVideoError\"></video>",
@@ -507,6 +545,8 @@ window.PAGES['overview'] = {
     '    <h2>分模块分析</h2>',
     '    <p v-if="(game.timeline || []).some(e => e.value_assumed || (e.tags || []).includes(\'value_assumed\'))" class="hint">分值尚未确认：当前按每次命中 2 分暂计，不代表已识别两分或三分。位置未知的出手不生成热区或出手距离，请标定球场并复核出手位置。</p>',
     '    <p class="hint">以下统计基于当前已识别与已确认的记录；未知结果不计入命中率。</p>',
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     // 这次分析什么都没出时，**先把原因说清楚**：用户看到 0:0 + 空列表会以为功能坏了，
     // 实际多半是上游判据放弃（镜头在动 / 球太小 / 没有记分牌），页面必须自己讲明白。
     '    <div class="card" v-if="emptyAnalysis">',
@@ -517,7 +557,11 @@ window.PAGES['overview'] = {
     '    </div>',
     '    <!-- ① 比分牌 + 分节比分 -->',
     '    <div class="card">',
+<<<<<<< HEAD
     '      <h3 class="card-title">比分与球队统计 <span class="sub">当前记录的得分汇总</span>',
+=======
+    '      <h3 class="card-title">比赛总览 <span class="sub">数据来源：GET /api/games/{{ S.jobId }}（game.json）</span>',
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     '        <span class="grow"></span>',
     '        <el-tag v-if="S.demoMode" type="warning" size="small" effect="plain">演示数据</el-tag>',
     '        <el-tag v-else type="success" size="small" effect="plain">后端数据</el-tag>',
@@ -530,7 +574,11 @@ window.PAGES['overview'] = {
 
     '    <!-- ①b 证据来源：这次结论是怎么来的 -->',
     '    <div class="card" v-if="evidence.length">',
+<<<<<<< HEAD
     '      <h3 class="card-title">证据来源 <span class="sub">本次分析的依据与限制</span></h3>',
+=======
+    '      <h3 class="card-title">证据来源 <span class="sub">game.meta · 自动计分用了哪几路证据</span></h3>',
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     '      <div class="grid grid-2">',
     '        <div v-for="(e,i) in evidence" :key="\'ev\'+i" class="kpi">',
     '          <div class="k">{{ e.k }}</div>',
@@ -565,7 +613,11 @@ window.PAGES['overview'] = {
     '    <!-- ③ 走势图 -->',
     '    <div class="grid grid-2">',
     '      <div class="card">',
+<<<<<<< HEAD
     '        <h3 class="card-title">{{ hasCarryIn ? \'本片段比分走势\' : \'比分走势\' }} <span class="sub">{{ hasCarryIn ? (\'不含比分牌带入的 \' + game.carry_in.home + \':\' + game.carry_in.away) : \'按已确认得分累加\' }}</span></h3>',
+=======
+    '        <h3 class="card-title">{{ hasCarryIn ? \'本片段比分走势\' : \'比分走势\' }} <span class="sub">{{ hasCarryIn ? (\'不含比分牌带入的 \' + game.carry_in.home + \':\' + game.carry_in.away) : \'game.progression · 阶梯累计得分\' }}</span></h3>',
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     '        <echarts-box :option="progressOption" height="330px" />',
     '      </div>',
     '      <div class="card">',
@@ -574,6 +626,61 @@ window.PAGES['overview'] = {
     '      </div>',
     '    </div>',
 
+<<<<<<< HEAD
+=======
+    '    <!-- ④ 视频 + 事件时间轴 -->',
+    '    <div class="grid grid-court">',
+    '      <div class="card">',
+    '        <h3 class="card-title">事件时间轴 <span class="sub">game.timeline · 共 {{ (game.timeline||[]).length }} 次出手</span>',
+    '          <span class="grow"></span>',
+    '          <el-radio-group v-model="filterMade" size="small">',
+    '            <el-radio-button label="all">全部</el-radio-button>',
+    '            <el-radio-button label="made">仅命中</el-radio-button>',
+    '            <el-radio-button label="miss">仅未中</el-radio-button>',
+    '          </el-radio-group>',
+    '          <el-select v-model="filterTeam" size="small" style="width:130px">',
+    '            <el-option label="双方" value="all" />',
+    '            <el-option :label="teamName(\'home\')" value="home" />',
+    '            <el-option :label="teamName(\'away\')" value="away" />',
+    '          </el-select>',
+    '        </h3>',
+    '        <div class="timeline">',
+    '          <div v-for="(e,i) in timeline" :key="i" class="tl-row" :class="{active: activeRow===i}" @click="gotoEvent(e,i)">',
+    '            <span class="t">{{ mmss(e.t) }}</span>',
+    '            <span><span class="tl-badge" :class="e.team===\'home\'?\'h\':\'a\'">{{ e.team===\'home\' ? teamName(\'home\') : teamName(\'away\') }}</span>',
+    '              <span class="tl-badge" :class="e.made?\'made\':\'miss\'" style="margin-left:4px">{{ e.made ? (e.counts_for_score===false ? \'+\' + e.value + \' 未确认\' : (e.value_estimated ? \'+\' + e.value + \' 待确认\' : \'+\'+(e.points||e.value))) : \'未中\' }}</span></span>',
+    '            <span class="pl">第{{ e.period }}节 {{ e.player }} · {{ e.zone }} · {{ e.value }}分出手 · {{ e.source }}</span>',
+    '            <span class="mono muted" style="font-size:12px">{{ (e.confidence*100).toFixed(0) }}%</span>',
+    '          </div>',
+    '          <el-empty v-if="!timeline.length" description="无符合条件的事件" :image-size="70" />',
+    '        </div>',
+    '      </div>',
+
+    '      <div class="card">',
+    '        <h3 class="card-title">原始视频 <span class="sub">GET /api/games/{{ S.jobId }}/video（Range 支持）</span></h3>',
+    '        <div class="row" style="margin-bottom:8px">',
+    '          <el-switch v-model="showVideo" active-text="显示视频" />',
+    '          <span class="hint" v-if="showVideo && !videoReady && !videoErr">正在加载视频流…</span>',
+    '        </div>',
+    '        <video v-if="showVideo && videoUrl" ref="video" :src="videoUrl" controls preload="metadata"',
+    '               style="width:100%;border-radius:10px;background:#000;max-height:320px"',
+    '               @loadedmetadata="onVideoMeta" @error="onVideoError"></video>',
+    '        <el-alert v-if="videoErr" type="warning" :closable="false" :title="videoErr" />',
+    '        <el-empty v-if="showVideo && !videoUrl" :image-size="70"',
+    '                  description="演示数据模式下没有视频源；连接后端并新建 video 任务后可在此播放" />',
+    '        <div class="hint" style="margin-top:10px">',
+    '          点击左侧任意一条事件：有视频时会把进度条跳到 <code>t - 0.6s</code> 并自动播放；没有视频时只高亮该行。',
+    '        </div>',
+    '        <el-divider />',
+    '        <div class="row">',
+    '          <el-statistic title="总回合数" :value="game.possessions || 0" />',
+    '          <el-statistic title="出手总数" :value="(game.timeline||[]).length" />',
+    '          <el-statistic title="待复核" :value="(game.needs_review||[]).length" />',
+    '          <el-statistic title="视频时长(秒)" :value="Math.round(game.duration||0)" />',
+    '        </div>',
+    '      </div>',
+    '    </div>',
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     '  </template>',
     '</div>'
   ].join('\n')

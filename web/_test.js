@@ -109,6 +109,7 @@ const beforePid = target.player_id;
 const beforeValue = Number(target.value);
 const beforeMade = !!target.made;
 
+<<<<<<< HEAD
 // 本文件是**离线单测**：没有后端可写回。复核页的改判从 2026-09-25 起是 async：
 //   * 有后端（canSubmit=true）时会 await 提交 → 再 APP_LOAD_JOB 重新拉产物，
 //     本地状态靠"重新加载"更新 —— node 单测里没有后端，这条路根本走不通；
@@ -119,6 +120,8 @@ const beforeMade = !!target.made;
 win.STORE.backendOk = false;
 win.STORE.demoMode = true;
 
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 // 场景 A：把「未中」改成「命中」（或反向），分值保持不变
 self.correct(target, !beforeMade, beforeValue);
 
@@ -141,11 +144,18 @@ ok('复核队列已剔除该次出手', !self.rows.some(r => Math.abs(r.t - targ
 // 场景 B：分值改判（2 分 -> 3 分，保持命中）
 const t2 = g.timeline.filter(e => e.made && Number(e.value) === 2 && e.team === 'home')[0];
 if (t2) {
+<<<<<<< HEAD
   // 按 (t, player_id) 定位可改判的行。**优先从 allShots 取**：它每条都带有效的
   // _index；而复核队列里的行在"后端没给 index、又按 (t, player_id, value) 匹配不上
   // timeline"时会是 _index=-1，改判会被 review.js 的守卫直接挡掉（静默 return）。
   const row2 = self.allShots.concat(self.rows).filter(
     r => r.player_id === t2.player_id && Math.abs(r.t - t2.t) < 0.001)[0];
+=======
+  // 按 (t, player_id) 定位可改判的行（correct() 需要 row._index 才提交）
+  const row2 = self.rows.concat(self.allShots.map(e => Object.assign({}, e, {
+    _index: self.allShots.indexOf(e), _corrected: false
+  }))).filter(r => r.player_id === t2.player_id && Math.abs(r.t - t2.t) < 0.001)[0];
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
   const s0 = g.score.home;
   self.correct(row2, true, 3);
   ok('分值改判 2->3 后主队得分 +1', g.score.home === s0 + 1, s0 + ' -> ' + g.score.home);

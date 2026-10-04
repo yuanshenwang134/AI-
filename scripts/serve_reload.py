@@ -11,7 +11,11 @@
   所以这里用最朴素、哪都能跑的办法：
 
     用 subprocess 起 uvicorn（stdio 直接继承），
+<<<<<<< HEAD
     每秒看一眼 src/aihoop/**/*.py 的修改时间，变了就杀掉重启。
+=======
+    每秒看一眼 src/aihoop/*.py 的修改时间，变了就杀掉重启。
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
   不依赖任何花哨机制，也不会把服务输出吃掉。
 
@@ -36,7 +40,11 @@ POLL_S = 1.0
 def snapshot() -> dict:
     """当前源码指纹：每个 .py 的修改时间。"""
     out = {}
+<<<<<<< HEAD
     for p in WATCH_DIR.rglob("*.py"):
+=======
+    for p in WATCH_DIR.glob("*.py"):
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         try:
             out[str(p)] = p.stat().st_mtime
         except OSError:
@@ -73,7 +81,11 @@ def jobs_running(port: str) -> bool:
                 f"http://127.0.0.1:{port}/api/jobs", timeout=2.0) as r:
             rows = json.loads(r.read().decode("utf-8", "replace"))
     except Exception:  # noqa: BLE001
+<<<<<<< HEAD
         return True  # 状态未知时不自动杀进程；宁可延后重载
+=======
+        return False
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     return any(str(j.get("status")) in ("queued", "running") for j in rows)
 
 
@@ -87,6 +99,7 @@ def stop(proc: subprocess.Popen, timeout: float = 8.0) -> None:
         proc.kill()
 
 
+<<<<<<< HEAD
 def pids_listening(port: str) -> list:
     """谁在监听这个端口（返回 PID 列表）。
 
@@ -165,6 +178,16 @@ def main(argv=None) -> int:
 
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join([str(SRC)] + [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p])
+=======
+def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    autoreload = "--no-reload" not in argv
+    argv = [a for a in argv if a != "--no-reload"]
+    port = argv[0] if argv else "8000"
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(SRC)
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     env.setdefault("PYTHONIOENCODING", "utf-8")
     cmd = [sys.executable, "-m", "aihoop.cli", "serve", "--port", str(port)]
 
@@ -176,6 +199,7 @@ def main(argv=None) -> int:
     print("=" * 60)
     print()
 
+<<<<<<< HEAD
     # 启动前先看一眼端口：上次没退干净的旧后端会一直占着它，
     # 导致新进程起不来、窗口一闪而过（实测踩到）。默认只报告，
     # 加 --kill-port（或 重启后端.bat）才动手清。
@@ -225,6 +249,40 @@ def main(argv=None) -> int:
         # 窗口被关 / 进程被杀时也尽量别留孤儿（子进程还占着端口就白重启了）
         cleanup_orphans(port)
 
+=======
+    while True:
+        # stdio 直接继承：既保证控制台能看到 uvicorn 日志，
+        # 也避开受限环境对管道/命名管道的限制。
+        proc = subprocess.Popen(cmd, cwd=str(ROOT), env=env)
+        before = snapshot()
+        restart = False
+        try:
+            while proc.poll() is None:
+                time.sleep(POLL_S)
+                if autoreload and snapshot() != before:
+                    restart = True
+                    break
+        except KeyboardInterrupt:
+            stop(proc)
+            print("\n[stop] 收到 Ctrl+C，已停止后端")
+            return 0
+
+        stop(proc)
+        if not restart:
+            # 进程自己退出了（端口被占、启动报错等），不要无限重启
+            return proc.returncode or 0
+        # 改动可能还没停（我常连着改好几个文件），等它稳定
+        settle()
+        # 有任务在跑就等它跑完再重启 —— 别把用户几十分钟的分析杀掉
+        waited = 0.0
+        while jobs_running(port) and waited < 1800:
+            if waited == 0.0:
+                print("[autoreload] 有任务正在运行，等它跑完再重启…")
+            time.sleep(5)
+            waited += 5
+        print("\n[autoreload] 检测到源码变更，正在重启后端 …")
+        time.sleep(0.5)
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 if __name__ == "__main__":

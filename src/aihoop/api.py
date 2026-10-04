@@ -20,7 +20,11 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+<<<<<<< HEAD
 from typing import Any, Optional, Literal
+=======
+from typing import Any, Optional
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, WebSocket, \
     WebSocketDisconnect
@@ -166,6 +170,7 @@ class JobCreate(BaseModel):
     # 报告却写 0:0"是用户最不能接受的错法（实测踩到）。
     # court/visual：一律按场上检测到的进球计分（比分牌只作参考）；
     # scoreboard：强制用比分牌带入分 + 事件。
+<<<<<<< HEAD
     # 比赛复盘默认按场上出手；auto / scoreboard 仍可显式选择比分牌优先。
     score_policy: str = "court"
     # 没有球场标定时，视觉命中默认按几分计（2 或 3）
@@ -173,6 +178,11 @@ class JobCreate(BaseModel):
     # 显式声明"不要球场坐标"：允许在没有标定的情况下跑完整视觉路径，
     # 只验证投篮判定（球+筐），位置类结论一律关闭。见 _run_job 里那道门。
     allow_no_calibration: bool = False
+=======
+    score_policy: str = "auto"
+    # 没有球场标定时，视觉命中默认按几分计（2 或 3）
+    visual_shot_value: int = 2
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     # 手动篮筐提示 [cx, cy, r]（移动机位/复杂场景下用它锁定篮筐）
     hoop_hint: Optional[list] = None
     # 没有可用球场标定时，**自动启用逐帧滑动标定**（套餐 B 真视频兜底路径）。
@@ -186,6 +196,7 @@ class JobCreate(BaseModel):
     # 为什么必须在 API 里暴露：没有它，网页上传的视频只能走"橙色色块"那条
     # 线索（每帧 70 个噪声候选），传球网络必然是空的 —— 而这条路只有在
     # 专用球检测器下才可能出东西。
+<<<<<<< HEAD
     shot_engine: Literal["legacy", "geometry"] = "legacy"
     legacy_center_lock: bool = False  # 实验：固定机位中心约束，整段回归前不默认开启
     ball_weights: str = ""
@@ -195,6 +206,13 @@ class JobCreate(BaseModel):
     # —— 用户只看到一大段 CUDA 报错（实测踩到：本机是 torch 2.14.1+cpu）。
     # 现在默认空串，由 VideoSource 按 torch.cuda 的实际情况决定（有 GPU 用 GPU）。
     device: str = ""
+=======
+    ball_weights: str = ""
+    # 推理设备："0" = 第一块 GPU，"cpu" = CPU。
+    # ⚠️ 之前这里没有这个字段，所有视频任务都默认跑在 CPU 上 ——
+    # 球检测/篮筐检测逐帧推理，CPU 上慢十几倍。
+    device: str = "0"
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     # 跟踪器：botsort.yaml 比 bytetrack 抗遮挡
     tracker: str = "botsort.yaml"
 
@@ -268,6 +286,7 @@ def _run_job(job_id: str, req: JobCreate) -> None:
             cal_path = _find_calibration_for(req.video_path)
             if cal_path is None:
                 cal_path = DATA / "calibration.json"
+<<<<<<< HEAD
             from .court import Calibration
             from .sources import VideoSource
             if cal_path.exists():
@@ -286,6 +305,19 @@ def _run_job(job_id: str, req: JobCreate) -> None:
                     "尚未标定球场。请先标球场；只读比分可关闭球员检测并选 scoreboard 口径，"
                     "只想验证投篮判定（不要球场坐标）可传 allow_no_calibration=true。")
             _update(st, message=f"球场标定：{cal.name}")
+=======
+            if not cal_path.exists():
+                raise RuntimeError(
+                    "尚未标定球场。在界面上点「标球场」（点 4 个以上场地特征点），"
+                    "或执行：\n"
+                    "  python -m aihoop.cli calibrate --video <视频> "
+                    "--corners x1,y1 x2,y2 x3,y3 x4,y4 --half-court "
+                    "--save data/calibration.json")
+            from .court import Calibration
+            from .sources import VideoSource
+            cal = Calibration.load(str(cal_path))
+            _update(st, message=f"球场标定：{cal_path.name}")
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
             # ---- 人工标点 / 人工标注（界面上传过来的路径）----
             # marks：在画面上标过篮筐 → 直接用用户的坐标，跳过篮筐检测器
@@ -343,7 +375,10 @@ def _run_job(job_id: str, req: JobCreate) -> None:
                                         f"{n_made} 个标为进球")
 
             src = VideoSource(req.video_path, cal, stride=max(1, req.stride),
+<<<<<<< HEAD
                               shot_engine=req.shot_engine, legacy_center_lock=req.legacy_center_lock,
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                               player_stride=max(1, req.player_stride),
                               detect_players=req.detect_players,
                               score_policy=getattr(req, "score_policy", "auto"),
@@ -359,7 +394,11 @@ def _run_job(job_id: str, req: JobCreate) -> None:
                               ball_weights=_pick_ball_weights(
                                   getattr(req, "ball_weights", "")),
                               hoop_weights=_pick_hoop_weights(""),
+<<<<<<< HEAD
                               device=getattr(req, "device", "") or None,
+=======
+                              device=getattr(req, "device", "0"),
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                               manual_hoop=manual_hoop,
                               scoreboard_events=getattr(req, "scoreboard_events",
                                                         None),
@@ -393,12 +432,16 @@ def _run_job(job_id: str, req: JobCreate) -> None:
 async def _startup() -> None:
     global _loop
     _loop = asyncio.get_running_loop()
+<<<<<<< HEAD
     from .job_recovery import recover_jobs
     recover_jobs(DB_PATH)
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 @app.post("/api/jobs")
 async def create_job(req: JobCreate) -> dict:
+<<<<<<< HEAD
     if req.source == "jsonl" and (req.scoreboard_events or req.score_policy != "auto"):
         raise HTTPException(400, "jsonl 不支持覆盖 scoreboard_events / score_policy；请使用 video 比分任务。")
     job_id = uuid.uuid4().hex[:12]
@@ -406,6 +449,11 @@ async def create_job(req: JobCreate) -> dict:
                   payload=req.model_dump())
     from .job_recovery import process_identity
     st.payload["_worker_owner"] = process_identity()
+=======
+    job_id = uuid.uuid4().hex[:12]
+    st = JobState(job_id=job_id, source=req.source, video_path=req.video_path,
+                  payload=req.model_dump())
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     _mem[job_id] = st
     _persist(st)
     POOL.submit(_run_job, job_id, req)
@@ -752,8 +800,11 @@ async def correct_shot(job_id: str, index: int, body: ShotCorrection) -> Any:
 
     index 是 game["timeline"] 里的下标（按时间排序后的出手序号）。
     """
+<<<<<<< HEAD
     if body.value is not None and body.value not in (1, 2, 3):
         raise HTTPException(400, "分值只能为 1、2 或 3")
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     game = _load_json(job_id, "game.json")
     timeline = game.get("timeline", [])
     if not (0 <= index < len(timeline)):
@@ -894,6 +945,7 @@ async def get_frame(video_path: str, at: float = 1.0) -> Any:
         else:
             raise HTTPException(404, f"视频不存在：{video_path}")
     cap = cv2.VideoCapture(str(p))
+<<<<<<< HEAD
     opened = cap.isOpened()
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -910,6 +962,17 @@ async def get_frame(video_path: str, at: float = 1.0) -> Any:
     if frame is None:
         raise HTTPException(
             400, f"取不到第 {at}s 的帧：这个视频用 OpenCV 和 ffmpeg 都打不开（{p.name}）")
+=======
+    if not cap.isOpened():
+        raise HTTPException(400, "打不开视频")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, int(float(at) * fps)))
+    ok, frame = cap.read()
+    cap.release()
+    if not ok:
+        raise HTTPException(400, f"取不到第 {at}s 的帧")
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     h, w = frame.shape[:2]
     ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
     if not ok:
@@ -1420,11 +1483,18 @@ class ScoreboardOcrRequest(BaseModel):
     """框选比分牌 → OCR 读得分事件。
 
     ``box`` 是**归一化**坐标 [x0, y0, x1, y1]；不传就自动定位
+<<<<<<< HEAD
     （候选叠加区域经过多帧 OCR 比分语义验证后才使用）。
     ``start`` 是起始比分（视频从半场中间开始录时用它当基线）。
     """
     video_path: str
     team_names: Optional[dict] = None
+=======
+    （`scoreboard.locate_score_bug_static`：按"叠加层不随时间变化"找）。
+    ``start`` 是起始比分（视频从半场中间开始录时用它当基线）。
+    """
+    video_path: str
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     box: Optional[list] = None
     start: Optional[dict] = None
     step: float = 0.5
@@ -1441,6 +1511,10 @@ async def post_scoreboard_ocr(req: ScoreboardOcrRequest) -> Any:
     实测能稳定读出（这段素材：27:33 → 27:35 → 27:37 → 29:38，与画面逐帧一致）。
     """
     import cv2
+<<<<<<< HEAD
+=======
+    from .scoreboard import ScoreBugConfig, locate_score_bug_static, locate_score_bug_box
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     vp = Path(req.video_path)
     if not vp.exists():
@@ -1456,6 +1530,10 @@ async def post_scoreboard_ocr(req: ScoreboardOcrRequest) -> Any:
     if W <= 0 or H <= 0:
         raise HTTPException(400, "读不出视频尺寸")
 
+<<<<<<< HEAD
+=======
+    cfg = ScoreBugConfig()
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     box = None
     method = ""
     if req.box and len(req.box) == 4:
@@ -1467,11 +1545,32 @@ async def post_scoreboard_ocr(req: ScoreboardOcrRequest) -> Any:
         box = (int(min(x0, x1)), int(min(y0, y1)),
                int(abs(x1 - x0)), int(abs(y1 - y0)))
         method = "manual_box"
+<<<<<<< HEAD
+=======
+    else:
+        try:
+            b = locate_score_bug_static(str(vp), cfg)
+        except Exception:  # noqa: BLE001
+            b = None
+        if b is None:
+            try:
+                b = locate_score_bug_box(str(vp), cfg)
+            except Exception as e:  # noqa: BLE001
+                raise HTTPException(
+                    400, "自动定位不到比分牌：这段素材请手动框出比分区域"
+                         f"（{type(e).__name__}: {e}）")
+        box = (b.x, b.y, b.w, b.h)
+        method = "auto_static_overlay"
+
+    # 直接复用 scripts/read_marked_scoreboard.py 里那套已经实测有效的流程
+    # （抽帧 → 放大 → 批量 OCR → 只增不减 + 一次最多 +3 过滤误读）。
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     import importlib.util
     script = ROOT / "scripts" / "read_marked_scoreboard.py"
     spec = importlib.util.spec_from_file_location("read_marked_sb", script)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
+<<<<<<< HEAD
     try:
         res = mod.read_scoreboard(str(vp), box=box, start=req.start,
                                   step=req.step, zoom=req.zoom,
@@ -1479,6 +1578,38 @@ async def post_scoreboard_ocr(req: ScoreboardOcrRequest) -> Any:
         box, method = res["box"], res["method"]
     except (Exception, SystemExit) as e:
         raise HTTPException(422, f"比分牌读取失败：{e}")
+=======
+    import tempfile
+    tmpdir = ROOT / "out" / "tmp" / "sbocr_api"
+    tmpdir.mkdir(parents=True, exist_ok=True)
+    start = req.start or {}
+    try:
+        # 注意两套坐标约定：对外统一 (x, y, w, h)；grab_crops 收的是
+        # (x0, y0, x1, y1)（与命令行 --box-all 一致）。传错会得到空裁剪，
+        # 报出来却是"没能抽出画面"，很难查（实测踩到）。
+        x0y0x1y1 = [box[0], box[1], box[0] + box[2], box[1] + box[3]]
+        items = mod.grab_crops(str(vp), {"all": x0y0x1y1}, req.step, req.zoom,
+                               tmpdir, max_seconds=req.max_seconds)
+        if not items:
+            raise HTTPException(400, "没能抽出画面")
+        texts = mod.run_ocr(tmpdir, ROOT / "out" / "tmp" / "sb_ocr_api.json")
+        res = mod.build_events(items, texts, start)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"OCR 失败：{type(e).__name__}: {e}")
+    finally:
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+    res.update({"video": str(vp), "box": list(box), "method": method,
+                "start": start, "n_crops": len(items),
+                "ocr_hit": sum(1 for it in items
+                               if mod.parse_number(
+                                   texts.get(it["file"], "")) is not None
+                               or len(__import__("re").findall(
+                                   r"\d{1,3}", texts.get(it["file"], "") or "")) >= 2)})
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     outp = _sb_events_path_for(str(vp))
     outp.parent.mkdir(parents=True, exist_ok=True)
     outp.write_text(json.dumps(res, ensure_ascii=False, indent=2),
@@ -1486,8 +1617,11 @@ async def post_scoreboard_ocr(req: ScoreboardOcrRequest) -> Any:
     return {"ok": True, "path": str(outp), "box": list(box), "method": method,
             "n_crops": res["n_crops"], "ocr_hit": res["ocr_hit"],
             "final": res["final"], "n_events": len(res["events"]),
+<<<<<<< HEAD
             "start": res["start"], "baseline_from": res["baseline_from"],
             "warnings": res["warnings"],
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             "events": res["events"], "rejected": len(res.get("rejected") or []),
             "note": ("读到 %d/%d 张，得分事件 %d 条，最终比分 %s:%s —— "
                      "分析时会自动使用（也可在任务里带 scoreboard_events）"
@@ -1516,6 +1650,7 @@ async def get_scoreboard_events(video_path: str) -> Any:
             "start": d.get("start")}
 
 
+<<<<<<< HEAD
 def _pick_calibration_homography(Hm, rmse, src, dst, tags, per_frame_fit,
                                  merged_inliers=None) -> dict:
     """在多画面标定里挑**用哪一份单应矩阵**。
@@ -1794,6 +1929,8 @@ def _diagnose_keypoints(src, dst, tags, label_of=None) -> dict:
     return {"enough": True, "rows": rows, "worst": worst, "note": note}
 
 
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 def _calibration_quality(vp: Path, cal) -> dict:
     """标定的两项客观体检（保存前 + 分析时都用同一套判据）。
 
@@ -1831,6 +1968,7 @@ def _calibration_quality(vp: Path, cal) -> dict:
                   "当成底线角、把这一头的点标到那一头）；② 篮筐标点标错了。"
                   "请先核对画面里那个篮筐，再重新标特征点：同一帧里点 6 个以上、"
                   "不要都在同一条线上。" % hoop.get("reason", ""))
+<<<<<<< HEAD
 
     # ---- 第三项：**分析端用的那道硬门槛**（投影线与画面白线的吻合度 ratio）----
     # 为什么预览必须给出这个数字：分析端要求 ratio ≥ 1.25（见 sources 里的
@@ -2128,6 +2266,17 @@ async def get_video_by_path(video_path: str) -> Any:
         raise HTTPException(400, f"不支持的文件类型：{ext}（只允许视频）")
     # FileResponse 自带 Range 支持（前端拖动进度条/seek 都靠它）
     return FileResponse(p, media_type=mime)
+=======
+    return {"degenerate": bool(deg.get("degenerate")), "reason": reason,
+            "hoop_check": hoop, "metrics": deg}
+
+
+class CourtMarkRequest(BaseModel):
+    """球场标点：landmarks 是 {点名义名: [x,y]}，坐标为**归一化**值。"""
+    video_path: str
+    at: float = 1.0
+    landmarks: dict = {}
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 @app.get("/api/frames")
@@ -2205,10 +2354,13 @@ class MultiCalibRequest(BaseModel):
     compensate: bool = True
     # 每帧一组点：[{t: 12.3, landmarks: {名字: [x,y]}}]，x/y 是**该帧的归一化坐标**
     frames: list = []
+<<<<<<< HEAD
     # confirm=False（默认）= **只预览**：解出来、把逐点误差与合规性返回，但不落盘。
     # revision = 乐观锁：与已存标定的 revision 不一致就 409。
     confirm: bool = False
     revision: Optional[int] = None
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 class AutoCalibRequest(BaseModel):
@@ -2305,6 +2457,7 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
         for name, xy in (fr.get("landmarks") or {}).items():
             if name not in COURT_LANDMARKS or not xy:
                 continue
+<<<<<<< HEAD
             # 兼容两种写法：[x, y]（老）与 {"value":[x,y], "label":"界面上的名字"}（新）。
             # 后者是为了让"逐点诊断"能用**用户看到的那个名字**回话。
             lab = None
@@ -2317,6 +2470,11 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             dst.append(list(COURT_LANDMARKS[name]))
             tags.append({"name": name,
                          "label": lab or label_of.get(name, name),
+=======
+            src.append([float(xy[0]) * W, float(xy[1]) * H])
+            dst.append(list(COURT_LANDMARKS[name]))
+            tags.append({"name": name, "label": label_of.get(name, name),
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                          "t": round(t, 2)})
     seg_info: list = []
     dropped: list = []
@@ -2462,6 +2620,7 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             per_frame_fit.append({"t": tt, "n": len(items), "ok": False,
                                   "rmse_m": None,
                                   "note": f"这一帧解不出：{e}"})
+<<<<<<< HEAD
     # 有几幅画面自己就能标定（界面用它说明"你标的这两幅各自都成立"）
     # 具体用哪一幅解算由 _pick_calibration_homography 决定（取点的最多那一幅）。
     n_solvable_frames = sum(1 for f_ in per_frame_fit
@@ -2481,6 +2640,13 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                           "这是拍摄方式决定的，不是你点错了位置。"
                           "建议：只留**同一侧半场、同一镜头**的一幅画面，"
                           "在它上面把能看见的点一次点够 5~6 个（另一幅画面的点会被忽略）。")
+=======
+    best_frame = None
+    for f_ in per_frame_fit:
+        if f_.get("ok") and f_.get("H") is not None:
+            best_frame = f_
+            break
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     # 场景数（不同画面时刻的数量）—— 用来判断"是否跨镜头"
     n_frames = len({f.get("t") for f in (req.frames or [])})
@@ -2491,11 +2657,17 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
     _best_n = max([f.get("n", 0) for f in per_frame_fit] or [0])
     if _best_n < 4 and len(src) >= 4:
         detail = "、".join(f"t={f['t']}s 有 {f['n']} 个点" for f in per_frame_fit)
+<<<<<<< HEAD
         note = ("**每一幅画面都不够 4 个点**（%s）。单应矩阵要求**同一幅画面里至少 "
                 "4 个点**（跨画面只有在相机完全没动时才能拼）。界面上是左右两个画面："
                 "请把一侧半场看得清的那幅放左边、另一侧半场看得清的那幅放右边，"
                 "然后**每一幅各自点够 4~6 个点**（底线两角、罚球区两角、篮筐中心、"
                 "中圈中心），再解算。" % detail)
+=======
+        note = ("**没有任何一个画面凑够 4 个点**（%s）。单应矩阵要求同一帧里至少 4 个点"
+                "（跨帧的点只有在相机完全不动时才能拼）。请回到场地看得最全的那一帧，"
+                "**在同一帧里一次点够 5~6 个点**，再切到下一帧。" % detail)
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         ok = False
         if comp_note:
             note += "；" + comp_note
@@ -2505,6 +2677,7 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                 "n_points": len(src), "n_frames": n_frames,
                 "per_frame_fit": per_frame_fit, "H": None,
                 "compensate_note": comp_note, "segments": seg_info,
+<<<<<<< HEAD
                 "n_solvable_frames": n_solvable_frames,
                 "outliers": outliers, "n_inliers": n_inliers}
     ok = rmse < 1.5 and n_inliers >= 4
@@ -2606,19 +2779,62 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                 "但其余画面的点与它**不在同一镜头**，混进来只会互相拉偏，"
                 "所以没有参与解算（不是你点错了）。"
                 % (len(src), n_frames))
+=======
+                "outliers": outliers, "n_inliers": n_inliers}
+    ok = rmse < 1.5 and n_inliers >= 4
+
+    # ---- 保存前的客观体检：退化（近共线/重合）+ 独立校验（画面里的真篮筐）----
+    # 这两项是**必须**的：点几乎共线时 H 在这些点上是精确解（误差 0.00m），
+    # 离开这条线就飞掉；而"整份标定位错"只有拿真值点（篮筐）才看得出来。
+    cand = Calibration(name=vp.stem, method="web-keypoints-multi", src_px=src,
+                       dst_m=dst, H=Hm, reproj_error_m=round(rmse, 3),
+                       frame="full", for_video=str(vp), frame_size=[W, H])
+    qual = _calibration_quality(vp, cand)
+    deg, hoop_check = qual["metrics"], qual["hoop_check"]
+
+    # 只有 4 个点时，单应矩阵是**精确解** → 重投影误差恒为 0.00m，这个数字
+    # **不能**当质量依据：实测用户 4 个点的对应关系错了，界面仍显示"0.00m 可用"，
+    # 结果热区/战术图全错（后来靠"篮筐投影偏 6.6m"的独立校验才发现）。
+    if qual["degenerate"]:
+        ok = False
+        note = ("标定点位**退化**（几乎在一条线上 / 有重合点），这份标定不能用："
+                + qual["reason"]
+                + "（重投影误差小是假象：退化时它必然是 0.00m 左右）")
+        if comp_note:
+            note += "；" + comp_note
+    elif qual["reason"]:
+        ok = False
+        note = qual["reason"]
+        if comp_note:
+            note += "；" + comp_note
+    elif len(src) <= 4:
+        ok = False
+        note = ("只点了 %d 个点 —— 4 个点时单应矩阵是精确解，重投影误差必然是 "
+                "0.00m，**这个数字不能作为质量依据**（点位对应错了也照样是 0.00m）。"
+                "请至少点 6 个点：每个点都要点在真正的场地特征点上，"
+                "并确认你选的名称与它的实际位置一致 —— 这样误差才有意义，"
+                "也才能自动发现点错的那一个。" % len(src))
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         if comp_note:
             note += "；" + comp_note
     elif outliers and n_inliers >= 4:
         ok = False
+<<<<<<< HEAD
         tolerant = True
         note = ("有 %d 个点与其余点**互相矛盾**：%s —— 已用其余 %d 个一致的点"
                 "（RANSAC 内点）解算并保存，但位置结论会被判为**未校验**；"
                 "想让它变成可信标定，请重点这几个点。"
+=======
+        note = ("有 %d 个点与其余点**互相矛盾**：%s —— 请重新点这几个"
+                "（其余 %d 个点是一致的）。注意：只点 4 个点时没有冗余，"
+                "一个点点错整份标定就报废，建议点 5~6 个点。"
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                 % (len(outliers),
                    "、".join("%s(t=%ss)" % (d["label"], d["t"]) for d in outliers),
                    n_inliers))
     elif outliers and n_inliers < 4:
         ok = False
+<<<<<<< HEAD
         one_ok = [f for f in (per_frame_fit or [])
                   if f.get("ok") and f.get("n", 0) >= 4]
         if one_ok:
@@ -2672,6 +2888,24 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                 % rmse)
         if diff_shot_note:
             note += "；" + diff_shot_note
+=======
+        note = ("排除掉 %d 个矛盾的点后只剩 %d 个点，**解不出标定**"
+                "（单应矩阵至少要 3 个不共线的对应，且实际用 4 个以上才稳）。"
+                "请重点这几个：%s；再补 1~2 个别的特征点。"
+                % (len(outliers), n_inliers,
+                   "、".join(d["label"] for d in outliers)))
+    elif ok:
+        note = (("标定可用（%d 个点，来自 %d 个画面；平均重投影误差 %.2f m）"
+             % (len(src), n_frames, rmse))
+            + (("；" + comp_note) if comp_note else ""))
+    elif best_frame is not None:
+        ok = True      # 整体拟合不了，但**某一帧自己就能标定** → 用它
+        Hm = best_frame["H"]
+        rmse = float(best_frame["rmse_m"])
+        note = ("整体拟合不了（跨画面平均误差偏大，说明这些画面不是同一镜头），"
+                "但 t=%.2fs 这一帧自己就能标定（%d 个点，误差 %.2f m）—— "
+                "已用这一帧的标定。" % (best_frame["t"], best_frame["n"], rmse))
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     else:
         note = ("平均重投影误差 %.2f m 偏大，且没有任何一帧自己够 4 个点。"
                 "说明这些画面**不在同一镜头**（镜头平移/切换），"
@@ -2679,6 +2913,7 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                 "在**同一段镜头内**的几秒里抽帧，再把 4 个以上点标在那几帧上。"
                 % rmse)
 
+<<<<<<< HEAD
     if blocked:
         if comp_note:
             blocked += "；" + comp_note
@@ -2740,15 +2975,36 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             "H": Hm,
             "best_frame_t": (float(pick.get("t")) if pick.get("t") is not None
                              else None),
+=======
+    cal = Calibration(name=vp.stem, method="web-keypoints-multi",
+                      src_px=src, dst_m=dst, H=Hm,
+                      reproj_error_m=round(rmse, 3), frame="full",
+                      for_video=str(vp), frame_size=[W, H],
+                      note=note)
+    if ok:
+        out_p = _calibration_path_for(str(vp))
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            from dataclasses import asdict
+            out_p.write_text(json.dumps(asdict(cal), ensure_ascii=False,
+                                        indent=2), encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(500, f"标定写盘失败：{e}")
+    return {"ok": ok, "rmse_m": round(rmse, 3), "via": via,
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             "per_frame_fit": [{k: v for k, v in f_.items() if k != "H"}
                               for f_ in per_frame_fit],
             "compensate_note": comp_note, "segments": seg_info,
             "outliers": outliers, "n_inliers": n_inliers,
+<<<<<<< HEAD
             "n_solvable_frames": n_solvable_frames,
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             "dropped_frames": dropped,
             # 质量诊断：退化读数 + 独立校验（真篮筐）结论。
             # 前端据此显示"为什么不能用"，而不是只红一个"标定失败"。
             "degeneracy": deg, "hoop_check": hoop_check,
+<<<<<<< HEAD
             # 分析端那道硬门槛（吻合度 ratio，需 ≥1.25）也一起返回：
             # 界面据此当场告诉用户"这份标定分析端收不收"，而不是存下去才发现战术图是空的
             "calibration_fit": qual.get("calibration_fit") or {},
@@ -2764,6 +3020,12 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             "n_frames": n_frames, "per_point": per_point, "worst": worst,
             "saved": want_save, "revision": rev_out,
             "path": str(out_p) if want_save else None,
+=======
+            "n_points": len(src),
+            "n_frames": n_frames, "per_point": per_point, "worst": worst,
+            "saved": ok,
+            "path": str(_calibration_path_for(str(vp))) if ok else None,
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             "note": note}
 
 
@@ -2811,6 +3073,7 @@ COURT_LABELS = [
 
 @app.get("/api/court_landmarks")
 async def court_landmarks() -> Any:
+<<<<<<< HEAD
     """可选的点位清单（前端据此显示提示与进度）。
 
     `dst` 是该特征点在球场上的真实坐标（米）。为什么要给前端：
@@ -2826,6 +3089,10 @@ async def court_landmarks() -> Any:
             it["dst"] = [float(pt[0]), float(pt[1])]
         items.append(it)
     return {"landmarks": items, "min_points": 4,
+=======
+    """可选的点位清单（前端据此显示提示与进度）。"""
+    return {"landmarks": COURT_LABELS, "min_points": 4,
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             "court": {"length_m": 28.0, "width_m": 15.0}}
 
 
@@ -2857,6 +3124,81 @@ async def _court_landmarks_legacy() -> Any:
     ], "min_points": 4,
         "court": {"length_m": 28.0, "width_m": 15.0}}
 
+<<<<<<< HEAD
+=======
+
+@app.post("/api/calibrate")
+async def post_calibrate(req: CourtMarkRequest) -> Any:
+    """用球场特征点解出这段视频的标定并保存（≥4 个点，越多越准）。"""
+    import cv2  # noqa: F401  (court 内部用到)
+    from .court import calibrate_from_keypoints
+
+    vp = Path(req.video_path)
+    if not vp.exists():
+        cand = UPLOAD_DIR / vp.name
+        if cand.exists():
+            vp = cand
+        else:
+            raise HTTPException(404, f"视频不存在：{req.video_path}")
+    cap = __import__("cv2").VideoCapture(str(vp))
+    W = int(cap.get(__import__("cv2").CAP_PROP_FRAME_WIDTH))
+    H = int(cap.get(__import__("cv2").CAP_PROP_FRAME_HEIGHT))
+    cap.release()
+
+    kp_px, used = {}, []
+    for name, xy in (req.landmarks or {}).items():
+        if name not in COURT_LANDMARKS or not xy:
+            continue
+        kp_px[name] = (float(xy[0]) * W, float(xy[1]) * H)
+        used.append(name)
+    if len(kp_px) < 4:
+        raise HTTPException(
+            400, f"至少要点 4 个场地特征点（现在 {len(kp_px)} 个）—— "
+                 "四角、中线两端、中圈、罚球线、篮筐里挑看得清的")
+    try:
+        cal = calibrate_from_keypoints(kp_px, COURT_LANDMARKS)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"解算标定失败：{type(e).__name__}: {e}")
+    cal.name = Path(vp).stem
+    cal.method = "web-keypoints"
+    cal.for_video = str(vp)
+    cal.frame_size = [W, H]
+    cal.note = f"界面标点：{len(kp_px)} 个场地特征点"
+    rmse = float(getattr(cal, "reproj_error_m", 0.0) or 0.0)
+    # 保存前的客观体检：退化点位 + 独立校验（画面里的真篮筐）。
+    # 不合格就**不写盘**并说明原因 —— 老版本无条件写盘、只看 rmse<1.0，
+    # 于是退化标定（误差必然≈0）能一路存下来，分析时坐标整片错位还不报错。
+    qual = _calibration_quality(vp, cal)
+    if qual["degenerate"] or qual["reason"]:
+        return {"ok": False, "path": None, "points": used,
+                "n_points": len(kp_px), "rmse_m": round(rmse, 3),
+                "usable": False, "saved": False,
+                "degeneracy": qual["metrics"], "hoop_check": qual["hoop_check"],
+                "note": (qual["reason"] or "标定不合格") +
+                        "（提示：重投影误差小不等于标定对 —— 4~6 个点几乎共线时，"
+                        "误差必然是 0.00m 左右，但坐标会整片错位。）"}
+    out = _calibration_path_for(str(vp))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        from dataclasses import asdict
+        data = asdict(cal)
+        out.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"标定写盘失败：{e}")
+    # 重投影误差小于 1 米才算能用（4 个以上点是真的在约束，不是随便拟合）
+    ok = rmse < 1.0
+    return {"ok": True, "path": str(out), "points": used,
+            "n_points": len(kp_px), "rmse_m": round(rmse, 3),
+            "usable": ok, "saved": True,
+            "degeneracy": qual["metrics"], "hoop_check": qual["hoop_check"],
+            "note": ("标定可用（重投影误差 %.2f m），分析这段视频时会自动使用"
+                     % rmse) if ok else
+                    ("重投影误差 %.2f m 偏大 —— 点位可能点错了，"
+                     "建议重新标（或换一张更清楚的帧）" % rmse)}
+
+
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 @app.get("/api/calibrate")
 async def get_calibration(video_path: str) -> Any:
     """这段视频是否已经有标定（前端用来显示状态）。"""
@@ -2868,6 +3210,7 @@ async def get_calibration(video_path: str) -> Any:
     cp = _calibration_path_for(str(vp))
     if not cp.exists():
         # 老路径：data/calibration.json 也可能就是这段视频的
+<<<<<<< HEAD
         return {"exists": False, "path": str(cp), "revision": 0}
     try:
         d = json.loads(cp.read_text(encoding="utf-8"))
@@ -2916,6 +3259,17 @@ async def delete_calibration(video_path: str, revision: int = -1) -> Any:
     except Exception as e:  # noqa: BLE001
         raise HTTPException(500, f"删除标定失败：{e}")
     return {"ok": True, "removed": True, "path": str(cp)}
+=======
+        return {"exists": False, "path": str(cp)}
+    try:
+        d = json.loads(cp.read_text(encoding="utf-8"))
+    except Exception:
+        return {"exists": True, "path": str(cp), "error": "标定文件解析失败"}
+    return {"exists": True, "path": str(cp),
+            "for_video": d.get("for_video", ""),
+            "reproj_error_m": d.get("reproj_error_m"),
+            "method": d.get("method")}
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 @app.get("/api/marks")
@@ -3043,7 +3397,11 @@ def _code_rev() -> dict:
     """源码最后修改时间 —— 和进程启动时间一比就知道服务是不是旧代码。"""
     root = Path(__file__).resolve().parent
     newest = 0.0
+<<<<<<< HEAD
     for p in root.rglob("*.py"):
+=======
+    for p in root.glob("*.py"):
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         try:
             newest = max(newest, p.stat().st_mtime)
         except OSError:

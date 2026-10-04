@@ -42,6 +42,7 @@
   var STORE = Vue.reactive(STATE);
   window.STORE = STORE;
 
+<<<<<<< HEAD
   // 菜单即路由表：group 决定在左侧栏归到哪一段（首页 / 分析流程 / 结果与产出）。
   // 用户反馈（2026-09-27）：顶栏原来又平铺了一遍同样的菜单，跟左侧栏重复 ——
   // 现在顶栏只留品牌与状态，导航统一走左侧栏，菜单只在这一处定义。
@@ -60,6 +61,19 @@
   // 首页要用这份表渲染模块入口卡片，所以显式挂到 window（首页脚本在 app.js 之前加载，
   // 因此必须在 computed 里**惰性**读取，不能在模块顶层读）
   window.MENUS = MENUS;
+=======
+  var MENUS = [
+    { key: 'upload', icon: '⬆', title: '上传与分析' },
+    { key: 'overview', icon: '📊', title: '比赛总览' },
+    { key: 'stats', icon: '👥', title: '球员/球队统计' },
+    { key: 'shotchart', icon: '🎯', title: '投篮热区' },
+    { key: 'tactics', icon: '🧭', title: '战术分析' },
+    { key: 'highlights', icon: '🎬', title: '高光集锦' },
+    { key: 'report', icon: '📄', title: '导出/报告' },
+    { key: 'review', icon: '✅', title: '人工复核' },
+    { key: 'train', icon: '🏷', title: '训练标注' }
+  ];
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
   // ------------------------------------------------------------------
   // 数据装载
@@ -243,15 +257,23 @@
       return {
         state: STATE,
         menus: MENUS,
+<<<<<<< HEAD
         // 打开网页先落在「首页」：以前默认落在比赛总览，没有任务时是一大片空白，
         // 用户不知道该点哪里（反馈 2026-09-27）
         route: 'home',
+=======
+        route: 'overview',
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         api: window.API,
         isFileProtocol: window.API.isFileProtocol,
         currentPage: null,
         job: window.makeJob(),
+<<<<<<< HEAD
         ticking: null,
         reconnectTimer: null
+=======
+        ticking: null
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
       };
     },
     computed: {
@@ -263,8 +285,13 @@
     methods: {
       /** 从 location.hash 解析当前页（#/shotchart -> window.PAGES['shotchart']） */
       syncRoute: function () {
+<<<<<<< HEAD
         var key = (location.hash || '').replace(/^#\/?/, '').split('?')[0] || 'home';
         if (!window.PAGES[key]) key = 'home';
+=======
+        var key = (location.hash || '').replace(/^#\/?/, '').split('?')[0] || 'overview';
+        if (!window.PAGES[key]) key = 'overview';
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         this.route = key;
         this.currentPage = window.PAGES[key];
       },
@@ -273,7 +300,10 @@
         window.API.probe().then(function (ok) {
           self.state.backendOk = ok;
           if (ok) {
+<<<<<<< HEAD
             self.stopReconnect();
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             self.$message.success('后端已连接：' + window.API.base);
             bootstrap();
           } else {
@@ -295,6 +325,7 @@
           }).catch(function () {});
         }, 3000);
       },
+<<<<<<< HEAD
       /**
        * 后端起来之前打开的页面**自动重连** —— 不用再让用户自己点「重新探测」。
        *
@@ -329,6 +360,8 @@
           this.reconnectTimer = null;
         }
       },
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
       /** 供上传页调用：登记正在跑的任务 */
       registerJob: function (job) { this.job = job; this.trackJob(); }
     },
@@ -337,7 +370,10 @@
       window.addEventListener('hashchange', function () { self.syncRoute(); });
       this.syncRoute();
       bootstrap();
+<<<<<<< HEAD
       this.autoReconnect();      // 后端晚起来也能自动连上（见该方法注释）
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
       // 暴露给页面组件用（避免每个页面重复挂 window）
       window.APP = this;
     }

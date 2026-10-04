@@ -71,12 +71,15 @@ def build_report_json(game: dict, players: list[dict], shots: list[Shot],
 def _hot_zones(shots: list[Shot], n: int = 4) -> list[dict]:
     agg: dict[str, dict] = {}
     for s in shots:
+<<<<<<< HEAD
         if s.result == "unknown":
             continue
         # 位置未知的出手不进热区：占位坐标全贴在篮下，会把热区算成"全在禁区"，
         # 与战报里"没有球场坐标就不给热区"的说法自相矛盾（`rules.shot_chart` 早就这么挡了）。
         if not s.location_known:
             continue
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         z = zone_of(s.x, s.y)
         d = agg.setdefault(z, {"zone": z, "att": 0, "made": 0, "points": 0})
         d["att"] += 1
@@ -95,6 +98,7 @@ def _key_shots(shots: list[Shot], game: dict, n: int = 5) -> list[dict]:
     cand = [s for s in shots if s.made and
             (s.period >= 4 or s.value == ShotValue.THREE.value)]
     cand.sort(key=lambda s: (-s.period, -s.value, s.t))
+<<<<<<< HEAD
     # 位置未知的出手仍是真实事件，保留在关键球里，但**不给假的区域/距离**
     # （占位坐标算出来必然是"禁区 0 米"，会让战报和前端表格一起说谎）。
     return [{"t": round(s.t, 1), "period": s.period, "player_id": s.player_id,
@@ -102,6 +106,11 @@ def _key_shots(shots: list[Shot], game: dict, n: int = 5) -> list[dict]:
              "zone": zone_of(s.x, s.y) if s.location_known else "位置未知",
              "distance": round(s.distance, 2) if s.location_known else None}
             for s in cand[:n]]
+=======
+    return [{"t": round(s.t, 1), "period": s.period, "player_id": s.player_id,
+             "team": s.team, "value": s.value, "zone": zone_of(s.x, s.y),
+             "distance": round(s.distance, 2)} for s in cand[:n]]
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 def build_report_md(game: dict, players: list[dict], shots: list[Shot],
@@ -183,9 +192,12 @@ def build_report_md(game: dict, players: list[dict], shots: list[Shot],
     if any("value_estimated" in (s.tags or []) for s in shots):
         A("> ℹ 本片段的 2/3 分值是**视觉估计**（没有可用的球场标定，也没有比分牌"
           "跳变作为依据）。这些出手已经在「复核页」列出，可以手动改成 2 分或 3 分。")
+<<<<<<< HEAD
     n_outcome_unknown = sum(s.result == "unknown" for s in shots)
     if n_outcome_unknown:
         A(f"> 有 **{n_outcome_unknown}** 次出手的结果待确认，暂不计入命中率及得分；以下统计仅依据已有判定。")
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     n_team_unknown = sum(1 for s in shots if "team_unknown" in (s.tags or []))
     if n_team_unknown:
         A(f"> ⚠️ **有 {n_team_unknown} 次进球的「哪一队进的」判不出来**：这段素材里"

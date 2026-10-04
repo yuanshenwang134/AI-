@@ -24,8 +24,12 @@
 
   出手      一条轨迹出现「明显上升段」，且上升段之后落点在篮筐水平范围内
   命中      轨迹**向下穿过篮筐所在的那条水平线**，且穿越点的 x 落在篮筐内
+<<<<<<< HEAD
   不中      连续下降穿过篮筐高度，交点明确偏出篮圈
   待确认    飞出画面、被遮挡或篮圈边缘证据不足
+=======
+  不中      到了篮筐水平范围内但穿越点偏出，或者干脆没到
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
   穿越点用相邻两帧线性插值算 —— 30fps 下球穿过篮筐往往只有 1~2 帧，
   不插值就会漏掉大量进球。
@@ -95,6 +99,7 @@ class HoopConfig:
     rim_inner: float = 0.85         # 穿越点落在篮圈内圈的判定系数
     # 只对短间隔做穿越插值；轨迹中间断了一大截时线性插值会把穿越点算飞
     cross_max_gap_s: float = 0.15
+<<<<<<< HEAD
     # 穿越时的下落速度上限（像素/秒）。物理约束：球在画面里下落不可能比这更快，
     # 超过就说明这是插值插出来的假穿越 —— 用来兜住「轨迹有空洞时插值算飞了」。
     max_cross_speed_px: float = 1200.0
@@ -109,6 +114,8 @@ class HoopConfig:
     # 这是召回率 vs 精确率的取舍，需要人来定，所以留开关、默认不开。
     allow_hole_interpolation: bool = False
     max_track_gap_s: float = 0.6   # 长遮挡后的球不能直接当作同一次飞行
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     min_shot_gap_s: float = 0.5     # 两次出手之间的最小间隔（去重；集锦里可能连续有进球）
     # 机位允许的移动幅度（占画面宽度的比例）。
     # 手持/摇摄下篮筐漂移几十像素是正常的；但超过这个比例就说明镜头在
@@ -127,6 +134,7 @@ class HoopConfig:
     # ---- 进球判定精度 ----
     max_cross_gap_s: float = 0.6      # 穿过篮筐平面上下的最大时间间隔
     min_cross_drop_frac: float = 1.0  # 最小下落距离（篮圈半高 ry 的倍数）
+<<<<<<< HEAD
     # **米制下限**：除了"ry 的倍数"，再要求下落距离 ≥ 这么多米。
     # 为什么必须有：`ry` 是篮圈在**视向方向**上的像素尺度，篮圈接近正侧视时
     # 它趋于 0（实测手标薄筐 ry 只有 3.9px，物理上约 4cm），于是"必须下落 1 倍 ry"
@@ -181,6 +189,10 @@ class HoopConfig:
     # 把"球在最低点"（y 由增转减）当作切点，把一条长轨迹切成
     # 「上升→顶点→下落」的若干条弧线。一次出手 = 一条弧线。
     arc_split_min_px: float = 6.0     # 低于该幅度的来回抖动不算一次弧线
+=======
+    min_cross_speed_px: float = 25.0  # 穿越时的最小下落速度（像素/秒）
+    max_track_turns: int = 12         # 轨迹方向变化上限，过滤噪声轨迹
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     # 统计轨迹方向变化时忽略的小抖动幅度（像素）。球在篮筐附近会被检出
     # 一串几像素的上下抖动，不能算成真实的转向，否则真进球会被过滤掉。
     track_turn_min_amp_px: float = 4.0
@@ -350,7 +362,10 @@ class HoopTrack:
     # 中值滤波半径（采样点数）。球穿过篮筐时会被误检成篮圈，
     # 单点离群值会把进球判定用的篮筐中心拽偏十几像素，必须先滤掉。
     smooth_window: int = 2
+<<<<<<< HEAD
     identity_trace: list = field(default_factory=list)
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     @property
     def coverage(self) -> float:
@@ -447,6 +462,7 @@ class HoopTrack:
         return (rng([h.cx for _t, h in self.samples]),
                 rng([h.cy for _t, h in self.samples]))
 
+<<<<<<< HEAD
     def local_uncertainty(self, t: float, window_s: float = 1.5) -> float:
         """t 时刻附近"筐心到底在哪"的不确定度（像素，横向）。
 
@@ -483,6 +499,8 @@ class HoopTrack:
         hi = vals[min(len(vals) - 1, int(0.9 * (len(vals) - 1)))]
         return max(0.0, hi - lo)
 
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     def to_dict(self) -> dict:
         dx, dy = self.drift()
         rdx, rdy = self.robust_drift()
@@ -493,10 +511,15 @@ class HoopTrack:
                 "drift_px": [round(dx, 1), round(dy, 1)],
                 "robust_drift_px": [round(rdx, 1), round(rdy, 1)],
                 "cut_times": [round(c, 3) for c in self.cut_times],
+<<<<<<< HEAD
                 "identity_trace": self.identity_trace,
                 "samples_complete": True,
                 "samples": [[round(t, 6), h.to_dict()]
                             for t, h in self.samples]}
+=======
+                "samples": [[round(t, 2), h.to_dict()]
+                            for t, h in self.samples[::5]]}
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 def _init_hoop_from_samples(samples, cfg) -> Optional[tuple]:
     """用段内前几帧「得分最高」的候选估计初始篮筐位置。
@@ -516,6 +539,7 @@ def _init_hoop_from_samples(samples, cfg) -> Optional[tuple]:
     return xs[len(xs) // 2], ys[len(ys) // 2]
 
 
+<<<<<<< HEAD
 def _select_rim_candidate(candidates, previous, cfg):
     """Select one observed identity; never replace a lost target with a distant box."""
     valid = [h for h in candidates if all(math.isfinite(v) for v in
@@ -534,6 +558,8 @@ def _select_rim_candidate(candidates, previous, cfg):
                                     -h.confidence)), "identity_matched"
 
 
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 def detect_hoop_track_yolo(video_path: str, weights: str,
                            cfg: Optional[HoopConfig] = None,
                            sample_fps: float = 3.0, conf: float = 0.25,
@@ -560,8 +586,11 @@ def detect_hoop_track_yolo(video_path: str, weights: str,
     step = max(1, int(round(fps / max(0.1, sample_fps))))
     model = YOLO(weights)
     samples = []
+<<<<<<< HEAD
     identity_trace = []
     previous = None
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     i = 0
     while i < total:
         cap.set(cv2.CAP_PROP_POS_FRAMES, i)
@@ -570,12 +599,18 @@ def detect_hoop_track_yolo(video_path: str, weights: str,
             break
         r = model.predict(fr, conf=conf, imgsz=imgsz, device=device,
                           verbose=False)[0]
+<<<<<<< HEAD
         candidates = []
         if r.boxes is not None:
+=======
+        if r.boxes is not None:
+            best = None
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             for b in r.boxes:
                 if str(r.names[int(b.cls[0])]).lower() != "rim":
                     continue
                 x1, y1, x2, y2 = [float(v) for v in b.xyxy[0]]
+<<<<<<< HEAD
                 if not all(math.isfinite(v) for v in (x1, y1, x2, y2)) or x2 <= x1 or y2 <= y1:
                     continue
                 candidates.append(Hoop(cx=(x1+x2)/2, cy=(y1+y2)/2,
@@ -588,6 +623,16 @@ def detect_hoop_track_yolo(video_path: str, weights: str,
         if selected is not None:
             samples.append((i/fps, selected))
             previous = selected
+=======
+                if best is None or float(b.conf[0]) > best[0]:
+                    best = (float(b.conf[0]), x1, y1, x2, y2)
+            if best is not None:
+                _c, x1, y1, x2, y2 = best
+                samples.append((i / fps, Hoop(
+                    cx=(x1 + x2) / 2, cy=(y1 + y2) / 2,
+                    rx=max(6.0, (x2 - x1) / 2), ry=max(4.0, (y2 - y1) / 2),
+                    votes=1, confidence=1.0)))
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         i += step
     cap.release()
     if len(samples) < max(3, cfg.min_rim_votes):
@@ -597,6 +642,7 @@ def detect_hoop_track_yolo(video_path: str, weights: str,
             "可能是这个机位没在训练集里 —— 用 scripts/label_rim.py 点几次补数据。")
     tr = HoopTrack(samples=samples, fps=fps, duration=total / fps if fps else 0.0,
                    votes=len(samples), frames=max(1, total // step),
+<<<<<<< HEAD
                    width=W, cut_times=[], identity_trace=identity_trace)
     # 与颜色启发式那条路**同一道闸门**。为什么检测器这条路也必须查：
     # 模型每帧只挑"最像篮筐"的那个框，镜头上大幅移动（手持/摇摄）或者
@@ -612,6 +658,9 @@ def detect_hoop_track_yolo(video_path: str, weights: str,
             "这类镜头下「球从篮筐上方落到下方」这套判据不成立，"
             "所以放弃视觉判定。把机位固定住再拍，或在画面上手工标一次篮筐"
             "（移动镜头下按逐帧位置判定）。")
+=======
+                   width=W, cut_times=[])
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     return tr
 
 
@@ -803,18 +852,26 @@ class ShotEvent:
     t: float                       # 出手时刻（轨迹上升段起点）
     release_x: float               # 出手点（像素）
     release_y: float
+<<<<<<< HEAD
     made: Optional[bool]          # None: 出手可见，但结果证据不足
+=======
+    made: bool
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     apex_y: float                  # 轨迹最高点（图像 y 越小越高）
     cross_x: Optional[float] = None   # 向下穿越篮筐水平线时的 x
     approach: float = 0.0          # 轨迹末端离篮筐中心的水平距离
     confidence: float = 0.5
     quality: float = 0.0           # 穿筐质量：下落速度/时间间隔，用于去重
     player_box: Optional[list] = None
+<<<<<<< HEAD
     crossing_t: Optional[float] = None  # 落到篮筐平面的时刻，与出手时刻分开
     cluster: int = -1              # 属于第几条轨迹（调试用）
     # 这一球是"怎么判进"的：cross_measured = 逐帧看到穿筐；
     # cross_extrapolated = 筐口有检测空洞、用趋势拟合补出来的（置信度已降档）。
     evidence: str = ""
+=======
+    cluster: int = -1              # 属于第几条轨迹（调试用）
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     def to_dict(self) -> dict:
         return {"t": round(self.t, 2), "release_x": round(self.release_x, 1),
@@ -824,8 +881,12 @@ class ShotEvent:
                 "approach": round(self.approach, 1),
                 "confidence": round(self.confidence, 3),
                 "quality": round(self.quality, 2),
+<<<<<<< HEAD
                 "player_box": self.player_box, "cluster": self.cluster,
                 "crossing_t": self.crossing_t, "evidence": self.evidence}
+=======
+                "player_box": self.player_box, "cluster": self.cluster}
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 def _crossing_x(a, b, y_line: float) -> Optional[float]:
@@ -839,6 +900,7 @@ def _crossing_x(a, b, y_line: float) -> Optional[float]:
     return a[0] + (b[0] - a[0]) * k
 
 
+<<<<<<< HEAD
 def _px_per_m(hoop) -> float:
     """篮筐处「1 米 ≈ 多少像素」。优先篮板高（真实 1.05m），否则篮圈半径（0.225m）。
 
@@ -894,6 +956,8 @@ def _fitted_crossing(relative, ts, above_i: int, below_i: int, cfg):
     return xbar + bx * (t_star - tbar), t_star, by
 
 
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 def _turns(vals, min_amp: float = 0.0) -> int:
     """方向变化次数；min_amp > 0 时忽略小于该幅度的来回抖动。"""
     if len(vals) < 3:
@@ -924,6 +988,7 @@ def _turns(vals, min_amp: float = 0.0) -> int:
 
 
 
+<<<<<<< HEAD
 def _arc_cuts(seg, min_amp: float) -> list[int]:
     """找「球在最低点」的下标：y 由增转减的拐点。
 
@@ -1002,6 +1067,8 @@ def _shot_segments(tracks, hoop, max_gap, arc_split_min_px: float = 0.0):
             yield from _arcs(track_id, segment, arc_split_min_px, hoop)
 
 
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 def detect_shots(tracks: Sequence[Sequence], hoop,
                  cfg: Optional[HoopConfig] = None) -> list[ShotEvent]:
     """从像素空间的球轨迹里找出手，并判断有没有穿筐。
@@ -1014,6 +1081,7 @@ def detect_shots(tracks: Sequence[Sequence], hoop,
     """
     cfg = cfg or HoopConfig()
     get_hoop = hoop.at if isinstance(hoop, HoopTrack) else (lambda _t: hoop)
+<<<<<<< HEAD
     # 球不是质点：干净穿过要求球心落在 (1 - 球直径/筐内径) × rx 以内。
     # 这条**与标注方式无关**（物理常数），而且比原来的 rim_inner=0.85 严得多，
     # 见 HoopConfig.ball_diameter_m 的注释与 docs/假进球根因_球净空判据_2026-09-27.md。
@@ -1035,12 +1103,17 @@ def detect_shots(tracks: Sequence[Sequence], hoop,
     out: list[ShotEvent] = []
     for ti, tr in _shot_segments(tracks, hoop, cfg.max_track_gap_s,
                                  getattr(cfg, "arc_split_min_px", 0.0)):
+=======
+    out: list[ShotEvent] = []
+    for ti, tr in enumerate(tracks):
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         if len(tr) < cfg.min_track_pts:
             continue
         pts = [(float(c.x), float(c.y), float(c.t)) for c in tr]
         ts = [p[2] for p in pts]
         if ts[-1] - ts[0] < 0.25:
             continue
+<<<<<<< HEAD
         # Translation from camera panning must not look like a ball rising/falling.
         relative = [(p[0] - get_hoop(p[2]).cx, p[1] - get_hoop(p[2]).cy, p[2]) for p in pts]
         ys = [p[1] for p in relative]
@@ -1063,6 +1136,22 @@ def detect_shots(tracks: Sequence[Sequence], hoop,
         cross_speed = 0.0
         quality = 0.0
         evidence = ""            # "cross_measured" / "cross_extrapolated"
+=======
+        ys = [p[1] for p in pts]
+        # 方向变化太多的轨迹直接丢掉：球飞行最多「升->降」一两次，
+        # 不会像噪声轨迹一样来回横跳。
+        y_turns = _turns(ys, getattr(cfg, "track_turn_min_amp_px", 0.0))
+        if y_turns > cfg.max_track_turns:
+            continue
+        apex_i = int(min(range(len(pts)), key=lambda i: ys[i]))
+        apex_y = ys[apex_i]
+        hp_apex = get_hoop(ts[apex_i])
+
+        made = False
+        cross_x = None
+        cross_speed = 0.0
+        quality = 0.0
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
         # ---- 主判据：明确从篮筐上方穿到下方 ----
         # ---- 主判据：明确从篮筐上方穿到下方 ----
@@ -1082,6 +1171,7 @@ def detect_shots(tracks: Sequence[Sequence], hoop,
                 break
         if above_i is not None and below_i is not None:
             gap = ts[below_i] - ts[above_i]
+<<<<<<< HEAD
             drop = relative[below_i][1] - relative[above_i][1]
             hp_cross = get_hoop(ts[below_i])
             observed_gap = max(ts[j + 1] - ts[j] for j in range(above_i, below_i))
@@ -1166,17 +1256,43 @@ def detect_shots(tracks: Sequence[Sequence], hoop,
                         # 所以既不算进也不算不中，交人工。
                         evidence = "cross_rim_contact"
                 # Rim-edge overlap is ambiguous; do not force a miss.
+=======
+            drop = pts[below_i][1] - pts[above_i][1]
+            hp_cross = get_hoop(ts[below_i])
+            if gap <= cfg.max_cross_gap_s and drop >= hp_cross.ry * cfg.min_cross_drop_frac:
+                hp = get_hoop(ts[below_i])
+                # 直接在「最后一个上方点 -> 第一个下方点」之间插值。
+                # 这样即使球最后几帧贴筐/被遮，也不会把穿越点算到很远的地方。
+                xc = pts[above_i][0]
+                got = _crossing_x(pts[above_i], pts[below_i], hp.cy)
+                if got is not None:
+                    xc = got
+                cross_x = xc
+                cross_speed = drop / max(1e-3, gap)
+                if (abs(xc - hp.cx) <= hp.rx * cfg.rim_inner
+                        and cross_speed >= cfg.min_cross_speed_px):
+                    made = True
+                    quality = cross_speed / max(0.03, gap)
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
         # 不再用「球在筐内被采到就算进」这种弱判据 —— 静止的橙色物体
         # （球衣、手、篮网）经常正好落在筐内，会糊出假命中。
         # 命中必须满足上面的「明确从上方穿到下方」主判据。
 
         # ---- 再看有没有上升段（用来认定「这是一次出手」）----
+<<<<<<< HEAD
         rise = (max(ys[:apex_i + 1]) - ys[apex_i]) if apex_i > 0 else 0.0
         speed = 0.0
         if apex_i >= 2:
             dt = max(1e-3, ts[apex_i] - ts[0])
             speed = (ys[0] - ys[apex_i]) / dt
+=======
+        rise = (max(ys[:apex_i + 1]) - apex_y) if apex_i > 0 else 0.0
+        speed = 0.0
+        if apex_i >= 2:
+            dt = max(1e-3, ts[apex_i] - ts[0])
+            speed = (ys[0] - apex_y) / dt
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         saw_rise = (rise >= cfg.min_rise_px
                     and (apex_i < 2 or speed >= cfg.min_rise_speed))
 
@@ -1184,8 +1300,17 @@ def detect_shots(tracks: Sequence[Sequence], hoop,
 
         if saw_rise:
             release = pts[0]
+<<<<<<< HEAD
             t_rel = release[2]
             if ys[apex_i] > hp_apex.ry * 2.5:
+=======
+            for i in range(0, apex_i + 1):
+                if abs(pts[i][0] - hp_apex.cx) < abs(release[0] - hp_apex.cx):
+                    release = pts[i]
+                    break
+            t_rel = release[2]
+            if apex_y > hp_apex.cy + hp_apex.ry * 2.5:
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                 continue
             if approach > hp_apex.rx * cfg.rim_x_tol:
                 continue
@@ -1203,21 +1328,29 @@ def detect_shots(tracks: Sequence[Sequence], hoop,
             conf = max(0.5, conf - 0.1)
         if made and cross_speed < cfg.min_cross_speed_px:
             conf = max(0.5, conf - 0.1)
+<<<<<<< HEAD
         # 外推档拿到的"进"要降置信度：证据来自趋势拟合，不是逐帧看到的穿越。
         if made and evidence in {"cross_extrapolated", "cross_interpolated"}:
             conf = max(0.5, conf - 0.1)
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         out.append(ShotEvent(t=t_rel, release_x=release[0], release_y=release[1],
                              made=made, apex_y=apex_y, cross_x=cross_x,
                              approach=approach,
                              confidence=max(0.2, round(conf, 3)),
+<<<<<<< HEAD
                              quality=round(quality, 2), cluster=ti,
                              crossing_t=crossing_t,
                              evidence=evidence))
+=======
+                             quality=round(quality, 2), cluster=ti))
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     # 去重：同一时刻附近只留一条；优先保留命中的、置信度高的。
     out.sort(key=lambda s: (not s.made, -s.confidence, -s.quality, s.t))
     kept: list[ShotEvent] = []
     for s in out:
+<<<<<<< HEAD
         # Fragments can start far apart while observing the very same crossing.
         # Distinct observed crossings take precedence over near release times.
         def same_event(k):
@@ -1225,6 +1358,9 @@ def detect_shots(tracks: Sequence[Sequence], hoop,
                 return abs(s.crossing_t - k.crossing_t) < min(.2, cfg.min_shot_gap_s)
             return abs(s.t - k.t) < cfg.min_shot_gap_s
         if any(same_event(k) for k in kept):
+=======
+        if any(abs(s.t - k.t) < cfg.min_shot_gap_s for k in kept):
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             continue
         kept.append(s)
     kept.sort(key=lambda s: s.t)

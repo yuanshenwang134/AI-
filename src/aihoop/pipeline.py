@@ -163,11 +163,14 @@ def run_pipeline(rt: RawTrack, cfg: Optional[PipelineConfig] = None,
     away = compute_team_stats(shots, "away")
     player_rows = compute_player_stats(shots, rt.players, events)
 
+<<<<<<< HEAD
     for side, stats in (("home", home), ("away", away)):
         total = sum(p["points"] for p in player_rows if p["team"] == side)
         if total != stats.points:
             raise ValueError(f"队别统计不一致：{side} 球员合计 {total}，球队得分 {stats.points}")
 
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     # ---- 4) 比分/走势 ----
     meta = _evidence_meta(rt)      # 先取证据摘要：下面的计分口径要用到比分牌读数
     prog = score_progression(shots)
@@ -282,6 +285,7 @@ def run_pipeline(rt: RawTrack, cfg: Optional[PipelineConfig] = None,
         },
         "quarter_scores": qs,
         "progression": prog,
+<<<<<<< HEAD
         "timeline": [{**_shot_event(s, rt), "index": i}
                      for i, s in enumerate(sorted(shots, key=lambda x: x.t))],
         "periods": 4,
@@ -290,6 +294,13 @@ def run_pipeline(rt: RawTrack, cfg: Optional[PipelineConfig] = None,
         "needs_review": [{**s.to_dict(), "index": i}
                          for i, s in enumerate(sorted(shots, key=lambda x: x.t))
                          if "needs_review" in s.tags],
+=======
+        "timeline": [_shot_event(s, rt) for s in sorted(shots, key=lambda x: x.t)],
+        "periods": 4,
+        "duration": rt.duration,
+        "fps": rt.fps,
+        "needs_review": [s.to_dict() for s in shots if "needs_review" in s.tags],
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         "possessions": len(possessions(shots)),
         "carry_in": carry,
         # 带入分**到底算进总分没有**（口径是 auto 时取决于比分牌是否真读出来了）。
@@ -310,6 +321,7 @@ def run_pipeline(rt: RawTrack, cfg: Optional[PipelineConfig] = None,
     # 球员坐标能不能用？两条路：① 已通过校验的静态标定；② 自动逐帧标定（兜底，标注未校验）
     sliding_ok, sliding_why = _sliding_position_ok(meta)
     pos_via_sliding = bool(not cal_usable and sliding_ok)
+<<<<<<< HEAD
     # 最后一道闸：坐标自身在物理上说得通吗？
     # 分数（ratio/达标率）会骗人（实测 sliding 自称 14.5 / 0.999，坐标却把 90% 的
     # 球员压在边线上），但坐标的分布骗不了人。过不了就整层不出，并说明原因。
@@ -319,6 +331,8 @@ def run_pipeline(rt: RawTrack, cfg: Optional[PipelineConfig] = None,
         pos_via_sliding = False
         cal_usable = False
         sliding_why = coords_why
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     if cfg.make_tactics and not cal_usable and not pos_via_sliding:
         # 战术层整层都建立在球场坐标上 —— 标定错，它就整层错。
         # 这里明确标成"不适用"，而不是给一张错的俯视图。
@@ -483,6 +497,7 @@ def _evidence_meta(rt: RawTrack) -> dict:
         }
     if d.get("scoreboard_bar"):
         meta["scoreboard_bar"] = d["scoreboard_bar"]
+<<<<<<< HEAD
     if d.get("shot_engine"):
         meta["shot_engine"] = d["shot_engine"]
     if d.get("legacy_shots"):
@@ -491,6 +506,8 @@ def _evidence_meta(rt: RawTrack) -> dict:
         # 不进 timeline、不进出手次数与命中统计（判定仍只由 events 决定）。
         meta["shot_engine_details"] = {k: legacy.get(k) for k in
             ("version", "config", "model_path", "model_sha256", "real_ball_frames", "rim_frames", "trace_schema", "rim_tracking", "shot_candidates")}
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     if d.get("visual"):
         meta["visual"] = d["visual"]
     if d.get("hoop"):
@@ -580,6 +597,7 @@ def _sliding_position_ok(meta: dict) -> tuple[bool, str]:
     return True, ("%d 个锚点，达标率 %.2f，中位 ratio %.2f" % (n_a, ok_ratio, med))
 
 
+<<<<<<< HEAD
 def _tactics_coords_sane(player_track) -> tuple[bool, str]:
     """球员球场坐标在**物理上**说得通吗？（出战术图前的最后一道闸）
 
@@ -622,6 +640,8 @@ def _tactics_coords_sane(player_track) -> tuple[bool, str]:
         % "；".join(problems))
 
 
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 def _judgement(meta: dict, shots: list) -> dict:
     """这次到底「判出来了」还是「判不了」，以及为什么。
 
@@ -636,6 +656,7 @@ def _judgement(meta: dict, shots: list) -> dict:
     policy = str(meta.get("score_policy", "scoreboard") or "scoreboard").lower()
     if policy in ("court", "visual", "auto"):
         made = [s for s in shots if s.made]
+<<<<<<< HEAD
         if made:
             note = (f"按场上检测到的进球计分：本片段 {len(made)} 次命中，"
                     f"合计 {sum(s.points for s in made)} 分。")
@@ -655,6 +676,16 @@ def _judgement(meta: dict, shots: list) -> dict:
                     "reasons": reasons}
         return {"state": "court", "note": "本片段未检测到进球。",
                 "reasons": reasons}
+=======
+        note = (f"按场上检测到的进球计分：本片段 {len(made)} 次命中，"
+                f"合计 {sum(s.points for s in made)} 分。") if made else \
+               "本片段未检测到进球。"
+        fin = meta.get("scoreboard_final") or {}
+        if fin:
+            note += (f" 比分牌读数 {fin.get('home', 0)} : {fin.get('away', 0)}"
+                     " 仅作参考，不计入本片段得分。")
+        return {"state": "court", "note": note}
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     if sb.get("frames_hit"):
         unmatched = [s for s in shots if s.made and not s.counts_for_score]
         counted = [s for s in shots if s.made and s.counts_for_score]
@@ -668,7 +699,20 @@ def _judgement(meta: dict, shots: list) -> dict:
     if shots:
         return {"state": "visual",
                 "note": f"由「球 + 篮筐」路径判出 {len(shots)} 次出手"}
+<<<<<<< HEAD
     reasons = _no_score_reasons(meta, sb)
+=======
+    reasons = []
+    if meta.get("scoreboard_error"):
+        reasons.append("比分牌：" + str(meta["scoreboard_error"]).split("\n")[0][:90])
+    elif sb.get("frames_read"):
+        reasons.append(f"比分牌：一帧都没读出来（0/{sb['frames_read']}）——"
+                       "这段视频的台标和已标定的模板不匹配")
+    else:
+        reasons.append("比分牌：未启用")
+    if meta.get("visual_error"):
+        reasons.append("视觉路径：" + str(meta["visual_error"]).split("。")[0][:90])
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     unmatched = [s for s in shots if s.made and not s.counts_for_score]
     if unmatched:
         return {"state": "visual_unconfirmed",
@@ -681,6 +725,7 @@ def _judgement(meta: dict, shots: list) -> dict:
             "reasons": reasons}
 
 
+<<<<<<< HEAD
 def _no_score_reasons(meta: dict, sb: dict, include_scoreboard: bool = True) -> list:
     """一次得分都没判出来时，把「为什么」一条条列清楚。
 
@@ -710,12 +755,36 @@ def _team_name(rt: RawTrack, team: str) -> str:
     named = (rt.detections_meta.get("team_names") or {}).get(team)
     if named and not re.fullmatch(r"(?:球员|[Tt])\d+|其他球员", named):
         return named
+=======
+def _team_name(rt: RawTrack, team: str) -> str:
+    """给球队取个能看的名字。
+
+    优先级：
+      1. 数据源直接给的名字（野球场/1v1 场景下会用「球员1/球员2」）
+      2. 球员名字（合成数据是「主队1号」这种）
+    真视频链路里球员名字默认就是跟踪 ID（T143），直接用会得到两队都叫「T」，
+    所以要把它识别出来并退回「主队/客队」。
+    """
+    named = (rt.detections_meta.get("team_names") or {}).get(team)
+    if named:
+        return named
+    for p in rt.players.values():
+        if p.team != team:
+            continue
+        n = p.name.replace("号", "")
+        if re.fullmatch(r"[Tt]\d+", n):        # 纯跟踪 ID，不是真名字
+            continue
+        n = n.rstrip("0123456789")
+        if n:
+            return n
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     return "主队" if team == "home" else "客队"
 
 
 def _shot_event(s: Shot, rt: RawTrack) -> dict:
     name = rt.players[s.player_id].name if s.player_id in rt.players else s.player_id
     return {"t": round(s.t, 2), "team": s.team, "player_id": s.player_id,
+<<<<<<< HEAD
             "player": name, "value": s.value,
             "made": None if s.result == "unknown" else s.made, "result": s.result,
             "points": s.score_points, "counts_for_score": s.counts_for_score,
@@ -729,3 +798,11 @@ def _shot_event(s: Shot, rt: RawTrack) -> dict:
             "source": s.outcome_source, "period": s.period,
             "tags": s.tags, "evidence": s.evidence,
             "crossing_t": s.crossing_t, "review_t": s.review_t, "suggested_made": s.suggested_made}
+=======
+            "player": name, "value": s.value, "made": s.made,
+            "points": s.score_points, "counts_for_score": s.counts_for_score,
+            "value_estimated": "value_estimated" in s.tags,
+            "x": round(s.x, 2), "y": round(s.y, 2),
+            "zone": zone_of(s.x, s.y), "confidence": s.confidence,
+            "source": s.outcome_source, "period": s.period}
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f

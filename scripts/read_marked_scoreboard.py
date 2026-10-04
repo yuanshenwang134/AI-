@@ -88,6 +88,7 @@ def run_ocr(tmpdir: Path, out_json: Path) -> dict:
             for d in json.loads(out_json.read_text(encoding="utf-8"))}
 
 
+<<<<<<< HEAD
 from aihoop.score_text import parse_number, parse_scores, build_events
 
 def locate_scoreboard_ocr(video, tmpdir, team_names=None):
@@ -156,6 +157,61 @@ def read_scoreboard(video, box=None, start=None, step=.5, zoom=4., max_seconds=0
             raise ValueError('双方比分有效读数不足，请重新手动框选比分牌；未保存本次结果')
         res.update(video=str(video),box=list(box),method=method,n_crops=len(items))
         return res
+=======
+def parse_number(text: str):
+    """从 OCR 文本里抠出数字（取第一个 1~3 位的整数）。"""
+    for m in re.finditer(r"\d{1,3}", text or ""):
+        try:
+            return int(m.group(0))
+        except ValueError:
+            continue
+    return None
+
+
+def build_events(items: list[dict], texts: dict, start: dict,
+                 max_delta: int = 3) -> dict:
+    """把 OCR 读数序列变成得分事件（只增不减 + 一次最多 +max_delta）。"""
+    per = {}
+    for it in items:
+        txt = texts.get(it["file"], "")
+        if it["team"] == "all":
+            # 整条横条：按阅读顺序取前两个数字（左=主队、右=客队）
+            nums = [int(m.group(0)) for m in re.finditer(r"\d{1,3}", txt or "")]
+            if len(nums) >= 2:
+                per.setdefault("home", []).append((it["t"], nums[0]))
+                per.setdefault("away", []).append((it["t"], nums[1]))
+            elif len(nums) == 1:
+                per.setdefault("home", []).append((it["t"], nums[0]))
+            continue
+        v = parse_number(txt)
+        if v is None:
+            continue
+        per.setdefault(it["team"], []).append((it["t"], v))
+    events, bad = [], []
+    final = {}
+    for team in ("home", "away"):
+        seq = sorted(per.get(team) or [])
+        if not seq:
+            final[team] = start.get(team)
+            continue
+        cur = int(start.get(team, 0))
+        for t, v in seq:
+            if v < cur:
+                bad.append({"t": t, "team": team, "read": v, "prev": cur,
+                            "why": "读数回退"})
+                continue
+            if v - cur > max_delta:
+                bad.append({"t": t, "team": team, "read": v, "prev": cur,
+                            "why": "一次跳变超过 %d 分（多半是误读）" % max_delta})
+                continue
+            if v > cur:
+                events.append({"t": t, "team": team, "delta": v - cur,
+                               "value": v})
+                cur = v
+        final[team] = cur
+    events.sort(key=lambda e: e["t"])
+    return {"events": events, "rejected": bad, "final": final}
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 def main(argv=None) -> int:
@@ -165,8 +221,13 @@ def main(argv=None) -> int:
     ap.add_argument("--box-away", default=None, help="客队分区域 x0,y0,x1,y1")
     ap.add_argument("--box-all", default=None,
                     help="整条记分牌区域 x0,y0,x1,y1（推荐）：OCR 后按阅读顺序"
+<<<<<<< HEAD
                          "匹配队名与比分，并排除节次/计时数字" )
     ap.add_argument("--start", default=None, help="起始比分 home,away（如 27,35）")
+=======
+                         "取前两个数字当主/客队分 —— 比逐格框更稳" )
+    ap.add_argument("--start", required=True, help="起始比分 home,away（如 27,35）")
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     ap.add_argument("--step", type=float, default=0.5, help="抽样间隔（秒）")
     ap.add_argument("--zoom", type=float, default=4.0, help="放大倍数（OCR 关键）")
     ap.add_argument("--max-seconds", type=float, default=0.0)
@@ -182,7 +243,12 @@ def main(argv=None) -> int:
     if not boxes:
         print("[err] 至少给一个区域：--box-home 或 --box-away")
         return 2
+<<<<<<< HEAD
     start = dict(zip(("home", "away"), map(int,a.start.split(",")))) if a.start else {}
+=======
+    hs, as_ = [int(v) for v in a.start.split(",")]
+    start = {"home": hs, "away": as_}
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     # 临时目录放在**工作区内**：系统 %TEMP% 在受限沙箱里不可写（实测被判 permission denied），
     # 而且工作区内也方便出问题时人工检查中间小图。
@@ -196,7 +262,17 @@ def main(argv=None) -> int:
         print(f"抽样 {len(items)} 张小图（{len(boxes)} 个区域）→ OCR …")
         texts = run_ocr(tmpdir, ROOT / "out" / "tmp" / "sb_ocr.json")
         res = build_events(items, texts, start)
+<<<<<<< HEAD
         res.update({"video": a.video, "boxes": boxes, "n_crops": len(items)})
+=======
+        res.update({"video": a.video, "boxes": boxes, "start": start,
+                    "n_crops": len(items),
+                    "ocr_hit": sum(
+                        1 for it in items
+                        if (len(re.findall(r"\d{1,3}", texts.get(it["file"], "") or "")) >= 2
+                            if it["team"] == "all"
+                            else parse_number(texts.get(it["file"], "")) is not None))})
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         outp = Path(a.out)
         outp.parent.mkdir(parents=True, exist_ok=True)
         outp.write_text(json.dumps(res, ensure_ascii=False, indent=2),

@@ -183,9 +183,15 @@ def test_fuse_outcome():
     ])
     assert made is False and src == "ball_through_rim"
 
+<<<<<<< HEAD
     # 无证据 -> 未知、置信度 0
     made, conf, src = fuse_outcome([])
     assert made is None and conf == 0.0
+=======
+    # 无证据 -> 未中、置信度 0
+    made, conf, src = fuse_outcome([])
+    assert made is False and conf == 0.0
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 def test_detect_rim_events():
@@ -390,7 +396,12 @@ def _run_all() -> int:
     return 1 if fail else 0
 
 
+<<<<<<< HEAD
 
+=======
+if __name__ == "__main__":
+    raise SystemExit(_run_all())
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 def test_turns_ignore_small_jitter():
     """球到篮筐附近会抖出十几个小方向变化，不应算成真实的转向。"""
@@ -416,6 +427,7 @@ def test_hoop_track_rejects_ball_lock_outlier():
 
 
 def test_detect_shots_survives_bad_hoop_sample():
+<<<<<<< HEAD
     """一次「球穿过篮筐」的轨迹，即使有一帧篮筐被球带偏，也要判成进球。
 
     几何说明（2026-09-27 外部复核改）：原来的合成轨迹**没有上升段**，只在"判成进球"
@@ -425,6 +437,9 @@ def test_detect_shots_survives_bad_hoop_sample():
     3.4px = 0.11×rx；被带偏的那一帧放在**穿筐之前的下落段**（t=1.0s），这样第二条断言
     （不做中值滤波就判不出来）才是真的咬得住，而不是"没有产出任何事件"的空转。
     """
+=======
+    """一次「球穿过篮筐」的轨迹，即使有一帧篮筐被球带偏，也要判成进球。"""
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     from aihoop.ball import BallCandidate
     from aihoop.hoop import HoopTrack, Hoop, HoopConfig, detect_shots
     samples = []
@@ -432,6 +447,7 @@ def test_detect_shots_survives_bad_hoop_sample():
         t = 0.2 + 0.1 * i
         samples.append((round(t, 2), Hoop(cx=100.0, cy=100.0, rx=30.0,
                                           ry=10.0)))
+<<<<<<< HEAD
     # 球穿过筐时橙色检测会把「球」当成「篮圈」：这一帧的筐心偏到 70、半宽缩到 12
     samples[8] = (1.0, Hoop(cx=70.0, cy=100.0, rx=12.0, ry=10.0))
     ball = [
@@ -445,10 +461,25 @@ def test_detect_shots_survives_bad_hoop_sample():
     ]
     track = [BallCandidate(t=t, x=x, y=y, score=0.8, source="color")
              for (t, x, y) in ball]
+=======
+    samples[9] = (1.1, Hoop(cx=70.0, cy=100.0, rx=12.0, ry=10.0))
+    track = []
+    for i in range(17):
+        t = 0.2 + 0.1 * i
+        if t <= 1.2:
+            x = 160.0 - 50.0 * (t - 0.2)
+            y = 20.0 + 100.0 * (t - 0.2)
+        else:
+            x = 110.0 - 40.0 * (t - 1.2)
+            y = 120.0 + 160.0 * (t - 1.2)
+        track.append(BallCandidate(t=round(t, 2), x=x, y=y,
+                                   score=0.8, source="color"))
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     ht = HoopTrack(samples=samples, smooth_window=2)
     shots = detect_shots([track], ht, HoopConfig())
     assert len(shots) == 1
     assert shots[0].made is True
+<<<<<<< HEAD
     # 不做中值滤波时，被球带偏的篮筐会使这次投篮无法判进
     # （带偏的下落段样本影响选取的穿筐区间及横向偏移，
     #   超过净空门槛 0.467×rx = 14px）
@@ -456,6 +487,11 @@ def test_detect_shots_survives_bad_hoop_sample():
     raw_shots = detect_shots([track], raw, HoopConfig())
     assert raw_shots, "事件本身仍应产出（只是结果未知/不中）"
     assert all(not sh.made for sh in raw_shots)
+=======
+    # 不做中值滤波时，被球带偏的篮筐会把这次进球误判成不中
+    raw = HoopTrack(samples=samples, smooth_window=0)
+    assert all(not sh.made for sh in detect_shots([track], raw, HoopConfig()))
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 def test_locate_shooter_uses_ball_launch_point():
     """球员归属要用「球迹起点」，不能拿抛物线中段的球位去比球员中心。"""
@@ -500,7 +536,10 @@ def test_jump_shooter_picks_jumping_player():
     flat = {k: [(t, x1, 200.0, x2, y2) for (t, x1, _y, x2, y2) in v]
             for k, v in boxes.items()}
     assert VideoSource._jump_shooter(None, shot, flat) is None
+<<<<<<< HEAD
 
 
 if __name__ == "__main__":
     raise SystemExit(_run_all())
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f

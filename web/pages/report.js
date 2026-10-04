@@ -54,6 +54,7 @@ window.PAGES['report'] = {
       var j = this.reportJson;
       return (j && j.key_shots) || [];
     },
+<<<<<<< HEAD
     // 位置未知（占位坐标）的出手条数：热区/距离类结论必须排除它们，
     // 否则会把占位点聚成"全在禁区"的假热区（后端 export/report 已按同一口径挡掉）。
     noLocation: function () {
@@ -62,6 +63,8 @@ window.PAGES['report'] = {
         return (e.tags || []).indexOf('location_unknown') >= 0;
       }).length;
     },
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     hotZones: function () {
       var j = this.reportJson;
       if (j && j.hot_zones && j.hot_zones.length) return j.hot_zones;
@@ -317,7 +320,10 @@ window.PAGES['report'] = {
 
     '      <div class="card">',
     '        <h3 class="card-title">高效出手区域 <span class="sub">report.json · hot_zones（按每次出手得分排序）</span></h3>',
+<<<<<<< HEAD
     '        <p v-if="!hotZones.length && noLocation" class="hint">本片段有 <b>{{ noLocation }}</b> 次出手的位置是占位估计（缺少这个机位的球场标定），所以不给热区 —— 与其画一张全是「禁区」的假热区，不如空着。比分与命中判定不依赖坐标。</p>',
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     '        <el-table :data="hotZones" size="small" border empty-text="暂无数据">',
     '          <el-table-column prop="zone" label="区域" min-width="104" />',
     '          <el-table-column prop="att" label="出手" width="66" align="center" />',

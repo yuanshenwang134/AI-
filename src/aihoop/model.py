@@ -116,12 +116,15 @@ class Shot:
     clip_start: float = 0.0
     clip_end: float = 0.0
     tags: list[str] = field(default_factory=list)
+<<<<<<< HEAD
     evidence: str = ""
     crossing_t: Optional[float] = None
     review_t: Optional[float] = None  # suggested review instant; not a measured crossing
     decision_t: Optional[float] = None
     release_source: str = ""
     suggested_made: Optional[bool] = None
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     @property
     def points(self) -> int:
@@ -134,6 +137,7 @@ class Shot:
         return self.value if (self.made and self.counts_for_score) else 0
 
     @property
+<<<<<<< HEAD
     def location_known(self) -> bool:
         """出手位置是不是**真实测量**出来的。
 
@@ -145,6 +149,8 @@ class Shot:
         return "location_unknown" not in self.tags
 
     @property
+=======
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     def distance(self) -> float:
         """出手点到最近篮筐的距离（米）。坐标系见模块开头。"""
         d_left = ((self.x - HOOP_LEFT[0]) ** 2 + (self.y - HOOP_LEFT[1]) ** 2) ** 0.5
@@ -153,11 +159,17 @@ class Shot:
 
     def to_dict(self) -> dict:
         d = asdict(self)
+<<<<<<< HEAD
         if self.result == ShotResult.UNKNOWN.value:
             d["made"] = None
         d["points"] = self.points
         d["score_points"] = self.score_points
         d["distance"] = None if not self.location_known else round(self.distance, 3)
+=======
+        d["points"] = self.points
+        d["score_points"] = self.score_points
+        d["distance"] = round(self.distance, 3)
+>>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return d
 
 
