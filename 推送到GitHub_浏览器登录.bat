@@ -1,42 +1,42 @@
 @echo off
 chcp 65001 >nul 2>&1
-title æ¨é€åˆ° GitHubï¼ˆæµè§ˆå™¨ç™»å½•ï¼Œæ— éœ€ä»¤ç‰Œï¼‰
+title ÍÆËÍµ½ GitHub£¨ä¯ÀÀÆ÷µÇÂ¼£¬ÎŞĞèÁîÅÆ£©
 cd /d "%~dp0"
 
 echo.
 echo ============================================================
-echo    æ¨é€åˆ° GitHub  ^(ç”¨æµè§ˆå™¨ç™»å½•ï¼Œä¸éœ€è¦ä»¤ç‰Œ^)
+echo    ÍÆËÍµ½ GitHub  ^(ÓÃä¯ÀÀÆ÷µÇÂ¼£¬²»ĞèÒªÁîÅÆ^)
 echo ============================================================
 echo.
-echo  æ¨åˆ°ï¼š https://github.com/yuanshenwang134/AI-
+echo  ÍÆµ½£º https://github.com/yuanshenwang134/AI-
 echo.
-echo  æ¥ä¸‹æ¥ä¼šå‘ç”Ÿä»€ä¹ˆï¼š
-echo    1) è‡ªåŠ¨é…å¥½ TLS åç«¯  ^(è¿™å°æœºå™¨ä¸Š git é»˜è®¤çš„ schannel æ˜¯åçš„^)
-echo    2) å¼¹å‡ºç™»å½•çª—å£  -^>  ç‚¹ "Sign in with your browser"
-echo    3) æµè§ˆå™¨é‡Œç‚¹ä¸€ä¸‹ Authorize æˆæƒ
-echo    4) è‡ªåŠ¨æ¨é€å®Œæˆ
+echo  ½ÓÏÂÀ´»á·¢ÉúÊ²Ã´£º
+echo    1) ×Ô¶¯ÅäºÃ TLS ºó¶Ë  ^(ÕâÌ¨»úÆ÷ÉÏ git Ä¬ÈÏµÄ schannel ÊÇ»µµÄ^)
+echo    2) µ¯³öµÇÂ¼´°¿Ú  -^>  µã "Sign in with your browser"
+echo    3) ä¯ÀÀÆ÷ÀïµãÒ»ÏÂ Authorize ÊÚÈ¨
+echo    4) ×Ô¶¯ÍÆËÍÍê³É
 echo.
-echo  å¦‚æœç¬¬ 2 æ­¥æ²¡å¼¹çª—ï¼Œçœ‹æœ¬çª—å£æœ€åçš„æç¤ºï¼Œæœ‰å…œåº•åŠæ³•ã€‚
+echo  Èç¹ûµÚ 2 ²½Ã»µ¯´°£¬¿´±¾´°¿Ú×îºóµÄÌáÊ¾£¬ÓĞ¶µµ×°ì·¨¡£
 echo.
 pause
 echo.
 
-rem ---- 1) TLS åç«¯ï¼šè¿™å°æœºå™¨ä¸Š schannel æ‹¿ä¸åˆ° Windows å‡­æ®ï¼Œ
-rem         ä¸æ¢ openssl çš„è¯ä»»ä½• push/clone éƒ½ä¼šæŠ¥ SEC_E_NO_CREDENTIALS ----
+rem ---- 1) TLS ºó¶Ë£ºÕâÌ¨»úÆ÷ÉÏ schannel ÄÃ²»µ½ Windows Æ¾¾İ£¬
+rem         ²»»» openssl µÄ»°ÈÎºÎ push/clone ¶¼»á±¨ SEC_E_NO_CREDENTIALS ----
 git config --global http.sslBackend openssl >nul 2>&1
 if errorlevel 1 (
-  echo  [æç¤º] å…¨å±€é…ç½®å†™ä¸è¿›å»ï¼Œæ”¹ç”¨æœ¬ä»“åº“é…ç½®ã€‚
+  echo  [ÌáÊ¾] È«¾ÖÅäÖÃĞ´²»½øÈ¥£¬¸ÄÓÃ±¾²Ö¿âÅäÖÃ¡£
   git config http.sslBackend openssl >nul 2>&1
 )
-echo  [1/3] TLS åç«¯ = openssl
+echo  [1/3] TLS ºó¶Ë = openssl
 
-rem ---- 2) ç”¨ Git Credential Managerï¼ˆä¼šå¼¹æµè§ˆå™¨ç™»å½•çª—ï¼‰----
+rem ---- 2) ÓÃ Git Credential Manager£¨»áµ¯ä¯ÀÀÆ÷µÇÂ¼´°£©----
 git config --global credential.helper manager >nul 2>&1
 if errorlevel 1 ( git config credential.helper manager >nul 2>&1 )
-echo  [2/3] å‡­æ®åŠ©æ‰‹ = manager
+echo  [2/3] Æ¾¾İÖúÊÖ = manager
 
 echo.
-echo  [3/3] å¼€å§‹æ¨é€ ...
+echo  [3/3] ¿ªÊ¼ÍÆËÍ ...
 echo.
 git push -u origin main
 set RC=%ERRORLEVEL%
@@ -44,9 +44,9 @@ set RC=%ERRORLEVEL%
 echo.
 if "%RC%"=="0" (
   echo  ============================================================
-  echo    [OK] æ¨é€æˆåŠŸï¼
+  echo    [OK] ÍÆËÍ³É¹¦£¡
   echo.
-  echo    æ‰“å¼€çœ‹çœ‹ï¼š https://github.com/yuanshenwang134/AI-
+  echo    ´ò¿ª¿´¿´£º https://github.com/yuanshenwang134/AI-
   echo  ============================================================
   echo.
   pause
@@ -54,11 +54,11 @@ if "%RC%"=="0" (
 )
 
 echo  ============================================================
-echo    [!] ç”¨ manager æ²¡æˆåŠŸï¼ˆé”™è¯¯ç  %RC%ï¼‰
+echo    [!] ÓÃ manager Ã»³É¹¦£¨´íÎóÂë %RC%£©
 echo.
-echo    æ”¹ç”¨å¦ä¸€ä¸ªå‡­æ®åŠ©æ‰‹ wincred å†è¯•ä¸€æ¬¡ â€”â€” å®ƒæ›´å¯é ï¼š
-echo      ^(å¦‚æœå®ƒè¦ä½ è¾“ç”¨æˆ·å/å¯†ç ï¼Œç”¨æˆ·åå¡« yuanshenwang134ï¼Œ
-echo        å¯†ç å» github.com/settings/tokens ç”Ÿæˆä¸€ä¸ªä»¤ç‰Œç²˜è¿›æ¥^)
+echo    ¸ÄÓÃÁíÒ»¸öÆ¾¾İÖúÊÖ wincred ÔÙÊÔÒ»´Î ¡ª¡ª Ëü¸ü¿É¿¿£º
+echo      ^(Èç¹ûËüÒªÄãÊäÓÃ»§Ãû/ÃÜÂë£¬ÓÃ»§ÃûÌî yuanshenwang134£¬
+echo        ÃÜÂëÈ¥ github.com/settings/tokens Éú³ÉÒ»¸öÁîÅÆÕ³½øÀ´^)
 echo  ============================================================
 echo.
 git config credential.helper wincred
@@ -66,16 +66,16 @@ git push -u origin main
 set RC2=%ERRORLEVEL%
 echo.
 if "%RC2%"=="0" (
-  echo    [OK] æ¨é€æˆåŠŸï¼ https://github.com/yuanshenwang134/AI-
+  echo    [OK] ÍÆËÍ³É¹¦£¡ https://github.com/yuanshenwang134/AI-
 ) else (
-  echo    [x] è¿˜æ˜¯å¤±è´¥ï¼ˆé”™è¯¯ç  %RC2%ï¼‰ã€‚
+  echo    [x] »¹ÊÇÊ§°Ü£¨´íÎóÂë %RC2%£©¡£
   echo.
-  echo    å…œåº•åŠæ³•ï¼šæ‰‹åŠ¨åŠ è¿œç¨‹åœ°å€ï¼ŒæŠŠä»¤ç‰Œå†™åœ¨åœ°å€é‡Œæ¨ä¸€æ¬¡
-  echo      git push https://^<ä½ çš„ä»¤ç‰Œ^>@github.com/yuanshenwang134/AI-.git main
+  echo    ¶µµ×°ì·¨£ºÊÖ¶¯¼ÓÔ¶³ÌµØÖ·£¬°ÑÁîÅÆĞ´ÔÚµØÖ·ÀïÍÆÒ»´Î
+  echo      git push https://^<ÄãµÄÁîÅÆ^>@github.com/yuanshenwang134/AI-.git main
   echo.
-  echo    æˆ–è€…åœ¨æµè§ˆå™¨é‡Œç›´æ¥ä¼ æ–‡ä»¶ï¼š
+  echo    »òÕßÔÚä¯ÀÀÆ÷ÀïÖ±½Ó´«ÎÄ¼ş£º
   echo      https://github.com/yuanshenwang134/AI-/upload/main
-  echo      ^(æŠŠé¡¹ç›®é‡Œé™¤ data/uploadsã€outã€_tmpã€tools\ffmpeg ä¹‹å¤–çš„æ–‡ä»¶å¤¹æ‹–è¿›å»^)
+  echo      ^(°ÑÏîÄ¿Àï³ı data/uploads¡¢out¡¢_tmp¡¢tools\ffmpeg Ö®ÍâµÄÎÄ¼ş¼ĞÍÏ½øÈ¥^)
 )
 echo.
 pause
