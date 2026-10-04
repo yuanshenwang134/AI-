@@ -37,7 +37,6 @@
     var m = Math.floor(t / 60), s = Math.floor(t % 60);
     return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
   };
-<<<<<<< HEAD
   // 「结果未知」的唯一判据：后端对未知结果显式输出 made=null，同时 result='unknown'。
   // 两者都要认 —— 只看 result 会把"缺 result 但结果为空"的行当成"未中"（实测这处边界
   // 在徽章/文案/筛选之间不一致过）。徽章配色、tooltip 文案、时间轴筛选、投篮图兜底
@@ -51,11 +50,6 @@
     var head = (made === null || made === undefined) ? '待确认'
       : (made ? '命中' : '未中');
     return head + ({ 1: '罚球', 2: '两分', 3: '三分' }[value] || value + '分');
-=======
-  // 出手结果标签
-  D.shotLabel = function (value, made) {
-    return (made ? '命中' : '未中') + ({ 1: '罚球', 2: '两分', 3: '三分' }[value] || value + '分');
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
   };
   D.teamName = function (game, side) {
     var t = game && game.teams && game.teams[side];
@@ -200,20 +194,14 @@
   /**
    * 从 players.json / game.timeline 兜底重建投篮点集。
    * 后端没给 shotchart.json（或演示数据只有 game+players）时使用。
-<<<<<<< HEAD
    * 未知结果一律不进图（与后端 `rules.shot_chart` 的口径一致），
    * 判据统一用 `D.isUnknown`，避免"缺 result 但结果为空"漏成红点。
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
    */
   D.shotsFromPlayers = function (players) {
     var pts = [];
     (players || []).forEach(function (p) {
       (p.shots || []).forEach(function (s) {
-<<<<<<< HEAD
         if (D.isUnknown(s) || s.location_unknown || (s.tags || []).indexOf("location_unknown") >= 0) return;
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         pts.push({
           x: Number(s.x), y: Number(s.y), made: !!s.made, value: Number(s.value || 2),
           t: Number(s.t || 0), player_id: p.player_id, team: p.team,
@@ -225,11 +213,7 @@
   };
 
   D.shotsFromTimeline = function (game) {
-<<<<<<< HEAD
     return (game && game.timeline || []).filter(function(e){return !D.isUnknown(e) && !e.location_unknown && (e.tags || []).indexOf("location_unknown") < 0;}).map(function (e) {
-=======
-    return (game && game.timeline || []).map(function (e) {
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
       return {
         x: Number(e.x), y: Number(e.y), made: !!e.made, value: Number(e.value || 2),
         t: Number(e.t || 0), player_id: e.player_id, team: e.team,

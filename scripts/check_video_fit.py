@@ -100,7 +100,6 @@ def main(argv=None) -> int:
     ok2 = med_h > 100
     rows.append(("球员框高度", f"{med_h:.0f} px", "> 100 px", ok2))
 
-<<<<<<< HEAD
     # Shared ball-detection verdict, independent of tactical geometry fitness.
     from aihoop.footage import probe_detector
     ball_fit = probe_detector(a.video,a.ball_weights,a.samples,a.imgsz,a.device)
@@ -108,28 +107,6 @@ def main(argv=None) -> int:
     rate = ball_fit["ball_detection_rate"]
     rows.append(("球检测覆盖率", f"{rate:.0%}" if rate is not None else "未测",
                  ">=40%（非标注召回率）", ball_fit["ok"]))
-=======
-    # 3) 球检测命中率
-    if a.ball_weights and Path(a.ball_weights).exists():
-        hit = 0
-        try:
-            from ultralytics import YOLO
-            bm = YOLO(a.ball_weights)
-            for f in frames:
-                r = bm.predict(f, conf=0.25, imgsz=a.imgsz, device=a.device,
-                               verbose=False)[0]
-                if r.boxes is not None and any(
-                        "ball" in str(r.names[int(b.cls[0])]).lower()
-                        for b in r.boxes):
-                    hit += 1
-        except Exception as e:  # noqa: BLE001
-            print(f"[warn] 球检测失败: {e}")
-        rate = 100.0 * hit / max(1, len(frames))
-        ok3 = rate >= 40
-        rows.append(("球检测命中率", f"{rate:.0f}%", "> 40%", ok3))
-    else:
-        rows.append(("球检测命中率", "未测（没给 --ball-weights）", "> 40%", None))
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     # 4) 能否自动标定
     ratio = 0.0
@@ -150,11 +127,7 @@ def main(argv=None) -> int:
         print("%-15s %-28s %-12s %s" % (name, val, req, flag))
 
     hard = [r for r in rows if r[3] is False]
-<<<<<<< HEAD
     print("\n战术坐标适用性（独立于上面的球检测体检）：", end="")
-=======
-    print("\n结论：", end="")
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     if not hard:
         print("✅ 适合 —— 可以直接跑战术图（先 calibrate --interactive 标一次）")
     elif len(hard) <= 1:

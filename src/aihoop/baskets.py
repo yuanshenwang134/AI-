@@ -443,7 +443,6 @@ def value_of(cal, x: float, y: float, is_free_throw: bool = False,
         return int(default_value), "visual_estimate"
 
 
-<<<<<<< HEAD
 def calibration_hoop_error_m(cal, hoop_px) -> Optional[float]:
     """画面里的篮筐经这份标定投到地面后，离真篮筐 (0, ±1.575) 多少米。
 
@@ -463,8 +462,6 @@ def calibration_hoop_error_m(cal, hoop_px) -> Optional[float]:
     return min(math.hypot(hx, hy - 1.575), math.hypot(hx, hy + 1.575))
 
 
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 def calibration_sane_for_scoring(cal, hoop_px,
                                  max_dist_m: float = 3.0) -> tuple[bool, str]:
     """这份标定能不能用来判「这个球值 2 分还是 3 分」？
@@ -485,13 +482,9 @@ def calibration_sane_for_scoring(cal, hoop_px,
         hx, hy = cal.to_court(float(hoop_px[0]), float(hoop_px[1]))
     except Exception as e:  # noqa: BLE001
         return False, f"标定投影失败：{type(e).__name__}: {e}"
-<<<<<<< HEAD
     d = calibration_hoop_error_m(cal, hoop_px)
     if d is None:
         return False, "标定投影失败：算不出篮筐落点"
-=======
-    d = min(math.hypot(hx, hy - 1.575), math.hypot(hx, hy + 1.575))
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     if d > max_dist_m:
         return False, (f"标定把画面里的篮筐投到了 ({hx:.1f}, {hy:.1f})，"
                        f"离真实篮筐 {d:.1f}m —— 这份标定不属于这个视角，"

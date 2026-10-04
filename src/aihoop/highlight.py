@@ -35,16 +35,12 @@ class Clip:
     label: str
     path: Optional[str] = None
     available: bool = False
-<<<<<<< HEAD
     result: str = "missed"
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()
 
 
-<<<<<<< HEAD
 def _bundled_bin(name: str) -> Optional[str]:
     """先找项目自带的 ffmpeg/ffprobe，再找 PATH。
 
@@ -68,14 +64,6 @@ def ffmpeg_path() -> Optional[str]:
 
 def ffprobe_path() -> Optional[str]:
     return _bundled_bin("ffprobe")
-=======
-def ffmpeg_path() -> Optional[str]:
-    return shutil.which("ffmpeg")
-
-
-def ffprobe_path() -> Optional[str]:
-    return shutil.which("ffprobe")
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 def rank_shots(shots: list[Shot], limit: int = 15) -> list[Shot]:
@@ -114,26 +102,17 @@ def make_highlights(shots: list[Shot], video_path: Optional[str],
 
     clips: list[Clip] = []
     for i, s in enumerate(picks):
-<<<<<<< HEAD
         # 旧产物的 0/0 表示未提供范围；合法范围必须覆盖出手时刻。
         explicit = (s.clip_start is not None and s.clip_end is not None
                     and 0 <= s.clip_start <= s.t < s.clip_end)
         start = max(0.0, s.clip_start if explicit else s.t - cfg.clip_pad_before)
         end = s.clip_end if explicit else s.t + cfg.clip_pad_after
-=======
-        start = max(0.0, s.t - cfg.clip_pad_before)
-        end = s.t + cfg.clip_pad_after
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         if duration:
             end = min(end, duration)
         label = _label(s)
         clips.append(Clip(index=i, t=round(s.t, 2), start=round(start, 2),
                           end=round(end, 2), made=s.made, value=s.value,
-<<<<<<< HEAD
                           team=s.team, player_id=s.player_id, label=label, result=s.result))
-=======
-                          team=s.team, player_id=s.player_id, label=label))
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     ff = ffmpeg_path()
     note = ""
@@ -142,12 +121,8 @@ def make_highlights(shots: list[Shot], video_path: Optional[str],
                 "拿到视频后用 scripts/make_highlights.ps1 或本模块重新生成即可。")
     elif not ff:
         note = ("未检测到 ffmpeg，无法自动切片，仅导出时间码。"
-<<<<<<< HEAD
                 "安装：跑一次 `python tools_fetch_ffmpeg.py`（下到项目 tools/ffmpeg/bin/），"
                 "或 winget install Gyan.FFmpeg 后加入 PATH。")
-=======
-                "安装：winget install Gyan.FFmpeg ，或到 ffmpeg.org 下载后加入 PATH。")
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     else:
         for c in clips:
             dst = out / f"clip_{c.index:02d}_t{c.t:07.2f}.mp4"
@@ -200,7 +175,6 @@ def _cut(src: str, dst: Path, start: float, end: float) -> bool:
 
 
 def _label(s: Shot) -> str:
-<<<<<<< HEAD
     zone = "位置未知" if "location_unknown" in s.tags else zone_of(s.x, s.y)
     kind = {1: "罚球", 2: "两分", 3: "三分"}[s.value]
     if "value_assumed" in s.tags:
@@ -209,14 +183,6 @@ def _label(s: Shot) -> str:
     if kind in zone:
         kind = ""
     res = "待确认" if s.result == "unknown" else ("命中" if s.made else "未中")
-=======
-    zone = zone_of(s.x, s.y)
-    kind = {1: "罚球", 2: "两分", 3: "三分"}[s.value]
-    # 分区名里常已含「三分」，避免出现「底角三分三分命中」
-    if kind in zone:
-        kind = ""
-    res = "命中" if s.made else "未中"
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     return f"第{s.period}节 {_mmss(s.t)} {s.team} {s.player_id} " \
            f"{zone}{kind}{res}"
 

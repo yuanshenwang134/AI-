@@ -97,11 +97,7 @@ window.PAGES['highlights'] = {
     },
     videoSrc: function () {
       if (this.isDemo || !this.S.jobId) return '';
-<<<<<<< HEAD
       return window.API.jobVideoUrl(this.S.jobId);
-=======
-      return window.API.videoUrl(this.S.jobId);
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     },
     /* ------------------------------------------------------------------
        进球确认（人工判断 → 过滤误报 + 攒训练数据）
@@ -273,11 +269,7 @@ window.PAGES['highlights'] = {
     '               @error="onErr(i)" style="width:100%"></video>',
     '        <div v-else class="thumb" @click="play(c,i)">',
     '          <span>▶</span>',
-<<<<<<< HEAD
     '          <span class="lab">{{ c.result === \'unknown\' ? \'待确认\' : c.made ? \'+\' + c.value + \' 分\' : \'未中\' }}</span>',
-=======
-    '          <span class="lab">{{ c.made ? \'+\' + c.value + \' 分\' : \'未中\' }}</span>',
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     '        </div>',
     '        <div class="body">',
     '          <div class="ttl">',

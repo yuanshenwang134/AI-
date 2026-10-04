@@ -260,7 +260,6 @@ def _solve_linear(A: list[list[float]], b: list[float]) -> list[float]:
     return x
 
 
-<<<<<<< HEAD
 def _normalize(pts: Sequence[Sequence[float]]) -> tuple[list[list[float]],
                                                         list[list[float]]]:
     """Hartley 归一化：平移到质心、缩放到平均距离 √2。返回 (归一化点, 3x3 变换)。"""
@@ -342,21 +341,6 @@ def find_homography(src: Sequence[Sequence[float]],
         raise ValueError("单应矩阵求解失败：点共线或退化，请重新选点")
     k = H[2][2]
     return [[v / k for v in H[0]], [v / k for v in H[1]], [v / k for v in H[2]]]
-=======
-def find_homography(src: Sequence[Sequence[float]],
-                    dst: Sequence[Sequence[float]]) -> Matrix3:
-    """求 H 使得 dst ~ H @ src。至少需要 4 组点。"""
-    if len(src) < 4 or len(dst) != len(src):
-        raise ValueError("至少需要 4 组对应点")
-    A, b = [], []
-    for (x, y), (u, v) in zip(src, dst):
-        A.append([x, y, 1, 0, 0, 0, -u * x, -u * y])
-        b.append(u)
-        A.append([0, 0, 0, x, y, 1, -v * x, -v * y])
-        b.append(v)
-    h = _solve_linear(A, b)
-    return [[h[0], h[1], h[2]], [h[3], h[4], h[5]], [h[6], h[7], 1.0]]
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 def apply_homography(H: Matrix3, x: float, y: float) -> tuple[float, float]:

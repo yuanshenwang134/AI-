@@ -95,15 +95,12 @@ class BallConfig:
     min_avg_speed_px: float = 22.0  # 轨迹平均速度下限（像素/秒）
     min_displacement_px: float = 18.0  # 轨迹首尾位移下限（像素）
     max_direction_turns: int = 8    # 轨迹方向变化次数上限（过滤噪声轨迹）
-<<<<<<< HEAD
     # 方向变化**速率**上限（次/秒）。球在整段素材里常常连续被检出（运球 +
     # 出手是同一条轨迹），长度越长反转次数越多；只按次数当闸门会把
     # 「球每帧都检出、置信度 1.0」的真轨迹整条丢掉 —— 实测一段罚球素材
     # 5 个进球因此全部漏判。噪声的特征是**又短又抖**（反转次数/秒高），
     # 所以次数与速率**同时**超标才丢弃。
     max_turn_rate_per_s: float = 6.0
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     # 方向变化计数时，位移幅度小于该像素数的来回抖动不算一次转向。
     # 球到篮筐附近会被检测成一串小抖动点，旧实现会把它记成十几次转向。
     turn_min_amp_px: float = 3.0
@@ -431,13 +428,9 @@ def rank_ball_tracks(tracks: list[list[BallCandidate]],
         amp = float(getattr(cfg, "turn_min_amp_px", 0.0) or 0.0)
         turns = (_turns([p.x for p in tr], amp)
                  + _turns([p.y for p in tr], amp))
-<<<<<<< HEAD
         if (turns > cfg.max_direction_turns
                 and turns / max(1e-3, span)
                 > float(getattr(cfg, "max_turn_rate_per_s", 6.0))):
-=======
-        if turns > cfg.max_direction_turns:
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             continue
         # 真实球轨迹相邻点不会瞬间跳几百像素；静止物体+大跳变的假轨迹必须去掉。
         max_step = 0.0

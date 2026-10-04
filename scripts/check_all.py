@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 """一键跑完所有自检 —— 答辩前每次改动后跑这个。
-=======
-﻿"""一键跑完所有自检 —— 答辩前每次改动后跑这个。
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 包含：
   1. Python 端到端自检（tests/test_plan_a.py，11 项，零第三方依赖）
@@ -22,10 +18,7 @@ Windows 上如果 PowerShell 的执行策略拦住了 .ps1，用这个 .py 入�
 from __future__ import annotations
 
 import argparse
-<<<<<<< HEAD
 import os
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 import shutil
 import subprocess
 import sys
@@ -34,11 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
 ENV = {
-<<<<<<< HEAD
     "PYTHONPATH": os.pathsep.join([str(ROOT / "src")] + [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]),
-=======
-    "PYTHONPATH": str(ROOT / "src"),
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     # 关键：子进程强制 UTF-8 输出。否则 Windows 上子进程按 GBK 写管道，
     # 中文会变成乱码，甚至产生无法回写的替换字符（UnicodeEncodeError）。
     "PYTHONIOENCODING": "utf-8",
@@ -97,7 +86,6 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     results: list[tuple[str, bool]] = []
-<<<<<<< HEAD
     results.append(("投篮可见性回归", run("投篮可见性与遮挡单元测试",
         [PY, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_shot*.py"], required=not args.quick)))
     results.append(("外部检测报告回归", run("外部检测报告单元测试",
@@ -119,8 +107,6 @@ def main(argv=None) -> int:
     results.append(("球净空判据（假进球回归）", run(
         "球净空 + 筐位不确定度单元测试 tests/test_hoop_uncertainty.py",
         [PY, "-B", "tests/test_hoop_uncertainty.py"], required=not args.quick)))
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
     results.append(("Python 端到端自检（11 项）", run(
         "1/9 Python 端到端自检 tests/test_plan_a.py",
@@ -162,7 +148,6 @@ def main(argv=None) -> int:
     if node:
         ok1 = run("8/9 前端功能自检 web/_test.js", [node, "web/_test.js"])
         ok2 = run("8/9 前端口径校验 web/_validate.js", [node, "web/_validate.js"])
-<<<<<<< HEAD
         # 复核页「系统建议」的 7 项行为检查（unknown 状态、建议筛选、批量跳过未知、
         # 保存失败不本地改判…）—— 单独一个文件，很容易在门禁里漏掉，所以显式纳入。
         ok3 = run("8b/9 复核页建议行为检查 tests/test_review_suggestions.js",
@@ -195,9 +180,6 @@ def main(argv=None) -> int:
         results.append(("前端自检", ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7))
         results.append(("只标中心的篮筐接入（hoopsight）", ok8))
         results.append(("前端接线（videoUrl / 取帧前置条件）", ok9))
-=======
-        results.append(("前端自检", ok1 and ok2))
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     else:
         _safe_print("\n[skip] 未找到 node，跳过前端自检（不影响后端功能）")
 

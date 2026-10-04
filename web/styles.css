@@ -168,19 +168,11 @@ code {
   display: inline-block; min-width: 34px; text-align: center; padding: 1px 6px;
   border-radius: 5px; font-size: 11.5px; font-weight: 700; color: #fff;
 }
-<<<<<<< HEAD
 .tl-badge.made { background: var(--made); color: #052719; }
 .tl-badge.miss { background: #c9ced6; color: #3a424e; }
 .tl-badge.h { background: var(--home); }
 .tl-badge.a { background: var(--away); color: #1f2937; }
 .tl-badge.needs { background: #fff; border: 1px solid #f5a623; color: #8a5a00; }
-=======
-.tl-badge.made { background: var(--made); }
-.tl-badge.miss { background: #c9ced6; color: #5b6472; }
-.tl-badge.h { background: var(--home); }
-.tl-badge.a { background: var(--away); }
-.tl-badge.needs { background: #f5a623; }
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 /* ---------------- 球场容器 ---------------- */
 .court-wrap { position: relative; width: 100%; }
@@ -192,7 +184,6 @@ code {
 .legend .ring { background: transparent; border: 2px solid var(--miss); }
 .legend .dot { background: var(--made); }
 
-<<<<<<< HEAD
 /* ---------------- 标球场：左右两个画面（各标一个半场） ----------------
    用户实测反馈："只能在一个画面里点，想点完所有点根本不显示" ——
    一个镜头里只看得见半场。这里把场地分成左右两个画面并排，各自标各自的点。
@@ -212,8 +203,6 @@ code {
   background: rgba(0, 0, 0, .6); color: #fff;
 }
 
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 /* ---------------- 复核页 ---------------- */
 .rev-row {
   display: grid; grid-template-columns: 120px 1fr 128px 110px 250px;
@@ -319,7 +308,6 @@ code {
   border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
 .bar-track svg.formation-bar { width: 100%; height: 100%; display: block; }
 
-<<<<<<< HEAD
 .small { font-size: 12px; line-height: 1.8; }
 
 /* ---- 首页的模块入口卡片（home.js）----
@@ -333,6 +321,3 @@ code {
 .home-card-head { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .home-card-ico { font-size: 17px; line-height: 1; }
 .home-card-desc { color: var(--ink-3); font-size: 12px; line-height: 1.7; margin-top: 6px; }
-=======
-.small { font-size: 12px; line-height: 1.8; }
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f

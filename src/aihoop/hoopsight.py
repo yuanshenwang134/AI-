@@ -87,10 +87,7 @@ class SightConfig:
     # ---- 入筐 / 穿筐 ----
     enter_above_frac: float = 0.35   # 入筐点可以在篮圈中心上方/下方多少 ry 内
     enter_side_frac: float = 1.6     # 入筐点允许在篮圈外侧多少 rx 内（斜着进的球）
-<<<<<<< HEAD
     exit_pixel_tolerance: float = 0.5  # Pixel-scale uncertainty; capped at 10% of ry, central exits only
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     cross_inner: float = 0.90        # 穿筐点横向偏移上限（× rx）
     # 「球心真的进了圈」的横向阈值。**这一条是修误判的关键**：
     # 实测（nybo_3min）把 cross_inner 放到 0.9×rx 时，"球贴着篮圈右外缘斜掠而下"
@@ -121,10 +118,7 @@ class SightConfig:
     # ---- 去抖 ----
     min_shot_gap_s: float = 0.8
     stride: int = 1               # 逐帧扫（球穿筐只有几帧）
-<<<<<<< HEAD
     max_frame_trace: int = 30000  # 逐帧诊断上限；超过后继续累计原因计数
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     max_blob_stats: int = 4000    # 诊断留痕上限（窗口内所有连通域）
 
     # ---- 候选块挑选 ----
@@ -200,10 +194,7 @@ class SightScan:
     note_people: str = ""
     # 判据在这段素材上到底可不可信（见 _judge_diagnosis）
     diagnosis: dict = field(default_factory=dict)
-<<<<<<< HEAD
     candidate_trace: dict = field(default_factory=dict)
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 # --------------------------------------------------------------------------
@@ -240,32 +231,22 @@ def _expect_ball_px(hoop, cfg: SightConfig) -> float:
 
 
 def _blobs_in_window(cv2, np, prev_gray, gray, win, hoop, cfg: SightConfig,
-<<<<<<< HEAD
                      stats_out: Optional[list] = None, trace: Optional[dict] = None):
-=======
-                     stats_out: Optional[list] = None):
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     """窗口内的「球的尺寸」运动块 → [(cx, cy, area, w, h)]（绝对坐标）。
 
     stats_out 给了就把「所有」连通域（含被过滤掉的）追加进去，用于调阈值
     与答辩时的证据留痕 —— 光看最终 0 结果没法判断是阈值问题还是画面问题。
     """
-<<<<<<< HEAD
     if trace is not None:
         trace.update(stage="empty_window", components=0, accepted=0, rejected={})
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     x0, y0, x1, y1 = win
     if x1 - x0 < 8 or y1 - y0 < 8:
         return []
     a = prev_gray[y0:y1, x0:x1]
     b = gray[y0:y1, x0:x1]
     if a.size == 0 or a.shape != b.shape:
-<<<<<<< HEAD
         if trace is not None:
             trace["stage"] = "frame_shape_mismatch"
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return []
     d = cv2.absdiff(b, a)
     m = (d >= cfg.motion_thresh).astype(np.uint8) * 255
@@ -280,12 +261,9 @@ def _blobs_in_window(cv2, np, prev_gray, gray, win, hoop, cfg: SightConfig,
     hi_a = int(exp_a * cfg.size_hi ** 2)
 
     n, _lab, stats, cent = cv2.connectedComponentsWithStats(m, 8)
-<<<<<<< HEAD
     if trace is not None:
         trace.update(components=n-1, stage="no_motion_components" if n <= 1 else "all_components_filtered",
                      area_range=[lo_a, hi_a])
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     out = []
     for i in range(1, n):
         bx, by, bw, bh, area = (int(stats[i, 0]), int(stats[i, 1]),
@@ -299,7 +277,6 @@ def _blobs_in_window(cv2, np, prev_gray, gray, win, hoop, cfg: SightConfig,
                                   w=bw, h=bh, fill=round(fill, 3),
                                   exp_area=round(exp_a, 1),
                                   lo=lo_a, hi=hi_a))
-<<<<<<< HEAD
         reason = None
         if area < lo_a:
             reason = "area_small"
@@ -321,18 +298,6 @@ def _blobs_in_window(cv2, np, prev_gray, gray, win, hoop, cfg: SightConfig,
         trace["accepted"] = len(out)
         if out:
             trace["stage"] = "candidates_available"
-=======
-        if area < lo_a or area > hi_a:
-            continue
-        if bw < 2 or bh < 2:
-            continue
-        ar = max(bw, bh) / float(max(1, min(bw, bh)))
-        if ar > cfg.aspect_tol:
-            continue
-        if fill < cfg.min_fill or fill > cfg.max_fill:
-            continue
-        out.append((cx, cy, area, bw, bh))
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     return out
 
 
@@ -374,13 +339,8 @@ def _pick_blob(blobs, hoop, cfg: SightConfig):
 
 
 def _judge_span(chain, hoop, cfg: SightConfig,
-<<<<<<< HEAD
                 hoop_lookup: Optional[Callable[[float], object]] = None,
                 diagnostic: Optional[dict] = None) -> Optional[SightShot]:
-=======
-                hoop_lookup: Optional[Callable[[float], object]] = None
-                ) -> Optional[SightShot]:
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     """判「一段已经确认 入口在上、出口在下」的候选块算不算进球。
 
     chain: [(t, cx, cy, area)]，首点=入筐点（在篮圈带上），末点=出筐点（篮圈下方）。
@@ -388,11 +348,8 @@ def _judge_span(chain, hoop, cfg: SightConfig,
     这里只回答**几何上站不站得住**：时间、下落量、下落干不干脆、穿筐点正不正。
     """
     if len(chain) < cfg.min_chain:
-<<<<<<< HEAD
         if diagnostic is not None:
             diagnostic["reason"] = "insufficient_chain"
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return None
     look = hoop_lookup or (lambda _t: hoop)
     rx, ry = float(hoop.rx), float(hoop.ry)
@@ -401,11 +358,8 @@ def _judge_span(chain, hoop, cfg: SightConfig,
 
     t_enter, t_exit = chain[0][0], chain[-1][0]
     if (t_exit - t_enter) > cfg.max_cross_s:
-<<<<<<< HEAD
         if diagnostic is not None:
             diagnostic["reason"] = "crossing_timeout"
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return None
 
     # 1) 下落要基本单调：允许抖动，但**大幅回升**（球弹回筐上方）要否掉。
@@ -417,21 +371,15 @@ def _judge_span(chain, hoop, cfg: SightConfig,
         if dy < 0:
             big_rise = max(big_rise, -dy)
     if big_rise > cfg.split_rise_frac * ry:
-<<<<<<< HEAD
         if diagnostic is not None:
             diagnostic["reason"] = "upward_rebound"
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return None
 
     # 2) 总下落量
     drop = chain[-1][2] - chain[0][2]
     if drop < ry * cfg.min_drop_ry:
-<<<<<<< HEAD
         if diagnostic is not None:
             diagnostic["reason"] = "insufficient_drop"
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return None
 
     # 3) 穿筐点：在入筐点/出筐点之间插值出「y = 篮圈中心」的横坐标
@@ -447,11 +395,8 @@ def _judge_span(chain, hoop, cfg: SightConfig,
     if cross_x is None:
         cross_x = chain[-1][1]
     if abs(cross_x - cx0) > rx * cfg.cross_inner:
-<<<<<<< HEAD
         if diagnostic is not None:
             diagnostic["reason"] = "crossing_outside_rim"
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return None
 
     # 3b) **球心必须真的进过圈**：至少 `min_cup_frames` 帧，球心横向落在
@@ -464,11 +409,8 @@ def _judge_span(chain, hoop, cfg: SightConfig,
         if abs(p[1] - float(hp.cx)) <= float(hp.rx) * cfg.cup_inner:
             cup_frames += 1
     if cup_frames < cfg.min_cup_frames:
-<<<<<<< HEAD
         if diagnostic is not None:
             diagnostic["reason"] = "insufficient_cup_frames"
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         return None
 
     size = sum(x[3] for x in chain) / float(len(chain))
@@ -524,7 +466,6 @@ def _split_chains(series, cfg: SightConfig, hoop, fps: float,
     return [c for c in out if c]
 
 
-<<<<<<< HEAD
 def _exit_observed(point, hoop, cfg):
     """Measured exit, allowing bounded subpixel uncertainty for central points.
 
@@ -543,11 +484,6 @@ def _exit_observed(point, hoop, cfg):
 def _shots_from_blob_series(series, hoop, cfg: SightConfig,
                             fps: float = 30.0,
                             hoop_lookup=None, diagnostics=None) -> list[SightShot]:
-=======
-def _shots_from_blob_series(series, hoop, cfg: SightConfig,
-                            fps: float = 30.0,
-                            hoop_lookup=None) -> list[SightShot]:
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     """一串候选块里切出所有进球。
 
     做法是**一次顺序扫描**。为什么不是「先切链再逐段判」：
@@ -562,7 +498,6 @@ def _shots_from_blob_series(series, hoop, cfg: SightConfig,
         并且会否掉「中途大幅弹回筐上方」的段。
     """
     out: list[SightShot] = []
-<<<<<<< HEAD
     def record(row):
         if diagnostics is not None:
             diagnostics["counts"][row["reason"]] = diagnostics["counts"].get(row["reason"], 0) + 1
@@ -570,8 +505,6 @@ def _shots_from_blob_series(series, hoop, cfg: SightConfig,
                 diagnostics["spans"].append(row)
             else:
                 diagnostics["spans_truncated"] += 1
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     if not series:
         return out
     look = hoop_lookup or (lambda _t: hoop)
@@ -590,16 +523,12 @@ def _shots_from_blob_series(series, hoop, cfg: SightConfig,
                 enter_i = k
                 break
         if enter_i is None:
-<<<<<<< HEAD
             record({"start":series[i][0], "end":series[-1][0], "reason":"no_entry_in_band"})
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             break
 
         # ---- 往后找第一个出筐点（时间与位置都受约束）----
         exit_i = None
         restart = enter_i + 1
-<<<<<<< HEAD
         failure = "no_exit_in_band"
         for j in range(enter_i + 1, n):
             if series[j][0] - series[enter_i][0] > cfg.max_cross_s:
@@ -608,18 +537,10 @@ def _shots_from_blob_series(series, hoop, cfg: SightConfig,
             if series[j][0] - series[j - 1][0] > gap:
                 restart = j
                 failure = "candidate_gap"
-=======
-        for j in range(enter_i + 1, n):
-            if series[j][0] - series[enter_i][0] > cfg.max_cross_s:
-                break
-            if series[j][0] - series[j - 1][0] > gap:
-                restart = j
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                 break
             hp = look(series[j][0])
             gy = (series[j][2] - float(hp.cy)) / max(1.0, float(hp.ry))
             gx = (series[j][1] - float(hp.cx)) / max(1.0, float(hp.rx))
-<<<<<<< HEAD
             if _exit_observed(series[j], hp, cfg):
                 exit_i = j
                 break
@@ -637,17 +558,6 @@ def _shots_from_blob_series(series, hoop, cfg: SightConfig,
         if shot is not None:
             if detail["exit_tolerance_used"]:
                 shot.note += "；出口使用亚像素容差（完整几何证据通过）"
-=======
-            if gy >= 1.0 and abs(gx) <= cfg.cross_inner:
-                exit_i = j
-                break
-        if exit_i is None:
-            i = max(restart, enter_i + 1)
-            continue
-
-        shot = _judge_span(series[enter_i:exit_i + 1], hoop, cfg, look)
-        if shot is not None:
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
             out.append(shot)
             i = exit_i + 1          # 这一球消费掉，继续找下一球
         else:
@@ -735,11 +645,7 @@ def _hoop_at(samples, t: float, fallback):
 # --------------------------------------------------------------------------
 def scan_hoopsight(video_path: str, cfg: Optional[SightConfig] = None,
                    hoop_cfg: Optional[HoopConfig] = None,
-<<<<<<< HEAD
                    hoop_track=None, weights: str = "", hoop_hint=None,
-=======
-                   hoop_track=None, weights: str = "",
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                    device: str = "cpu",
                    progress: Optional[Callable[[float, str], None]] = None
                    ) -> SightScan:
@@ -749,11 +655,7 @@ def scan_hoopsight(video_path: str, cfg: Optional[SightConfig] = None,
 
     if hoop_track is None:
         hoop_track = detect_hoop_track(video_path, hoop_cfg or HoopConfig(),
-<<<<<<< HEAD
                                        weights=weights, device=device, hint=hoop_hint,
-=======
-                                       weights=weights, device=device,
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                                        progress=progress)
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -788,10 +690,7 @@ def scan_hoopsight(video_path: str, cfg: Optional[SightConfig] = None,
     prev_gray = None
     idx = 0
     nblobs = 0
-<<<<<<< HEAD
     candidate_trace = {"frames": [], "counts": {}, "truncated": 0, "limit": cfg.max_frame_trace, "spans": [], "spans_truncated": 0}
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     while True:
         ok = cap.grab()
         if not ok:
@@ -805,7 +704,6 @@ def scan_hoopsight(video_path: str, cfg: Optional[SightConfig] = None,
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         if prev_gray is not None and prev_gray.shape == gray.shape:
             t = idx / fps
-<<<<<<< HEAD
             for hoop_index, (h, samples) in enumerate(hoops):
                 cur = _hoop_at(samples, t, h)
                 w = wins[id(h)]
@@ -827,17 +725,6 @@ def scan_hoopsight(video_path: str, cfg: Optional[SightConfig] = None,
                 else:
                     candidate_trace["truncated"] += 1
                 if b is not None:
-=======
-            for h, samples in hoops:
-                cur = _hoop_at(samples, t, h)
-                w = wins[id(h)]
-                keep_stats = len(blob_stats) < cfg.max_blob_stats
-                blobs = _blobs_in_window(cv2, np, prev_gray, gray, w, cur, cfg,
-                                         stats_out=blob_stats if keep_stats else None)
-                nblobs += len(blobs)
-                b = _pick_blob(blobs, cur, cfg)
-                if b is not None:
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
                     series[id(h)].append((t, b[0], b[1], float(b[2])))
                 # 筐下的人：和判进球同一次扫描里做，不额外读一遍视频
                 if cfg.detect_people:
@@ -854,13 +741,10 @@ def scan_hoopsight(video_path: str, cfg: Optional[SightConfig] = None,
 
     scan = SightScan(fps=fps, duration=total / fps if fps else 0.0,
                      frames=idx, blobs=nblobs)
-<<<<<<< HEAD
     from dataclasses import asdict
     candidate_trace["config"] = asdict(cfg)
     candidate_trace["fps"] = fps
     scan.candidate_trace = candidate_trace
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     scan.blob_stats = blob_stats
     scan.people = [p.to_dict() for p in people]
     scan.note_people = (f"筐下检出人形块 {len(people)} 个"
@@ -878,12 +762,8 @@ def scan_hoopsight(video_path: str, cfg: Optional[SightConfig] = None,
         # 判进球时用**该时刻的**篮筐位置（篮筐会随镜头漂移）
         shots = _shots_from_blob_series(
             s, h, cfg, fps=fps,
-<<<<<<< HEAD
             hoop_lookup=lambda t, _s=samples, _f=h: _hoop_at(_s, t, _f),
             diagnostics=candidate_trace)
-=======
-            hoop_lookup=lambda t, _s=samples, _f=h: _hoop_at(_s, t, _f))
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         scan.shots.extend(shots)
 
     # 置信度门槛：低于门槛的判定**不作为进球输出**（但仍会进 rejected 供诊断）。

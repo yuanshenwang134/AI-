@@ -68,7 +68,6 @@
       .finally(t.done);
   };
 
-<<<<<<< HEAD
   API.deleteJSON = function (url, ms) {
     var t = withTimeout(ms || 20000);
     return fetch(url, { method: 'DELETE', signal: t.signal })
@@ -83,8 +82,6 @@
       .finally(t.done);
   };
 
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
   API.postJSON = function (url, body, ms) {
     var t = withTimeout(ms || 30000);
     return fetch(url, {
@@ -373,7 +370,6 @@
   API.addManualShot = function (jobId, payload) {
     return API.postJSON(API.base + '/api/games/' + jobId + '/shots/add', payload);
   };
-<<<<<<< HEAD
   // 注意：这里原来叫 API.videoUrl(jobId)，而文件后面**又**定义了一个
   // API.videoUrl(videoPath)（标定页用），后一个把前一个覆盖掉 —— 于是总览页/高光页
   // 传 jobId 进去得到 `/api/video?video_path=<jobId>` 这种永远打不开的地址（实测发现）。
@@ -381,9 +377,6 @@
   //   jobVideoUrl(jobId)  → /api/games/{jobId}/video  （按任务取原视频）
   //   videoUrl(videoPath) → /api/video?video_path=... （按文件路径取，标定页用）
   API.jobVideoUrl = function (jobId) { return API.base + '/api/games/' + jobId + '/video'; };
-=======
-  API.videoUrl = function (jobId) { return API.base + '/api/games/' + jobId + '/video'; };
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
   API.mediaUrl = function (jobId, path) {
     return API.base + '/api/media/' + jobId + '/' + String(path).replace(/^\/+/, '');
   };
@@ -458,7 +451,6 @@
     return API.getJSON(API.base + '/api/calibrate?video_path=' +
       encodeURIComponent(videoPath), 10000);
   };
-<<<<<<< HEAD
   /** 撤销这段视频的标定（标错了要能重来；revision 做乐观锁） */
   API.deleteCalibration = function (videoPath, revision) {
     return API.deleteJSON(API.base + '/api/calibrate?video_path=' +
@@ -472,8 +464,6 @@
   API.samples = function () {
     return API.getJSON(API.base + '/api/samples', 20000);
   };
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
   /** 随机抽 N 个画面（多画面标定用）。给了 center 就抽那一时刻附近的帧
    *  —— 这几帧属于同一镜头，标点才能叠加到同一坐标系。 */
   API.getFrames = function (videoPath, n, center, span) {
@@ -485,7 +475,6 @@
     }
     return API.getJSON(u, 60000);
   };
-<<<<<<< HEAD
   /** 自动挑两帧"同一镜头"的画面（标定页用）。
    *  为什么需要后端做：判定镜头有没有切要算 ORB 内点率，浏览器里做不了。
    *  两帧必须在同一镜头，合并解才成立（实测用户取到两个镜头 -> 必然矛盾）。 */
@@ -493,8 +482,6 @@
     return API.getJSON(API.base + '/api/frames_stable?video_path=' +
       encodeURIComponent(videoPath) + '&n=' + (n || 8), 120000);
   };
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
   /** 多画面累加解标定（并返回逐个点误差） */
   API.calibrateAuto = function (payload) {
   return postJSON('/api/calibrate_auto', payload);

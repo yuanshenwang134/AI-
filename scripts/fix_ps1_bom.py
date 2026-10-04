@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 """确保所有 .ps1 脚本都是「UTF-8 带 BOM」，并检查 .bat 的换行与编码。
-=======
-"""确保所有 .ps1 脚本都是「UTF-8 带 BOM」。
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 为什么需要（真实踩过的坑）：
     Windows PowerShell 5.1 读取**无 BOM 的 UTF-8** .ps1 时，会按系统 ANSI(GBK)
@@ -13,7 +9,6 @@
     本工程曾因此让 sync_demo.ps1 里的 `$hlSrc = ...` 被注释掉，
     触发 Test-Path 参数为 null 的诡异错误。
 
-<<<<<<< HEAD
 .bat 为什么也要查（2026-09-27 又踩一次）：
     cmd.exe **只认 CRLF**。用 LF 写的 .bat 会被它按行拆错，报出一串
     "'astAPI' is not recognized as an internal or external command" ——
@@ -21,8 +16,6 @@
     cmd 按控制台代码页（GBK）解 UTF-8 字节 → 乱码。所以这里的规矩是：
     **.bat 一律纯 ASCII + CRLF**（要让用户看到的中文放到 Python 那侧打印）。
 
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 用法（在 aihoopanalyst 目录下）：
     python scripts/fix_ps1_bom.py            # 检查并修复
     python scripts/fix_ps1_bom.py --check    # 只检查，不修改（非零退出表示有问题）
@@ -38,11 +31,8 @@ BOM = b"\xef\xbb\xbf"
 
 # 扫描范围：仓库里所有 .ps1（含根目录的启动器）
 PATTERNS = ["scripts/*.ps1", "*.ps1"]
-<<<<<<< HEAD
 # .bat 单独按"纯 ASCII + CRLF"检查
 BAT_PATTERNS = ["scripts/*.bat", "*.bat"]
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 
 
 def targets() -> list[Path]:
@@ -52,7 +42,6 @@ def targets() -> list[Path]:
     return out
 
 
-<<<<<<< HEAD
 def bat_targets() -> list[Path]:
     out: list[Path] = []
     for pat in BAT_PATTERNS:
@@ -99,8 +88,6 @@ def check_bats(check_only: bool) -> list[Path]:
     return bad
 
 
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="只检查，不修改")
@@ -131,7 +118,6 @@ def main(argv=None) -> int:
         p.write_bytes(BOM + text.encode("utf-8"))
         print(f"  [FIX]  {p.relative_to(ROOT)} 已补上 BOM")
 
-<<<<<<< HEAD
     print("\n-- .bat（要求纯 ASCII + CRLF）--")
     bad_bats = check_bats(args.check)
     if bad_bats:
@@ -140,8 +126,6 @@ def main(argv=None) -> int:
             print("运行 `python scripts/fix_ps1_bom.py` 自动修（会转成 ASCII + CRLF）。")
         return 1
 
-=======
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     print()
     if need and args.check:
         print(f"{len(need)} 个 .ps1 缺少 BOM —— 在 Windows PowerShell 5.1 下会乱码。")
@@ -150,13 +134,9 @@ def main(argv=None) -> int:
     if need:
         print(f"{len(need)} 个文件需要人工检查（不是合法 UTF-8）。")
         return 1
-<<<<<<< HEAD
     print(f"全部 {len(files)} 个 .ps1 都带 BOM，PowerShell 5.1 可安全读取；"
           f"{len(bat_targets())} 个 .bat 的换行与编码检查通过"
           f"（要求 CRLF；含非 ASCII 时必须设 chcp 65001）。")
-=======
-    print(f"全部 {len(files)} 个 .ps1 都带 BOM，PowerShell 5.1 可安全读取。")
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
     return 0
 
 

@@ -1,5 +1,4 @@
 ﻿# 批量 OCR：对目录下的图片逐张用 Windows.Media.Ocr 识别，输出 JSON
-<<<<<<< HEAD
 # 用法: powershell -File ocr_batch.ps1 -Dir <图片目录> -Out <结果json> [-WithWords]
 # 为什么要批量：PowerShell 每次启动要几百毫秒，逐帧调用会慢十倍以上。
 # -WithWords：额外输出每个词的坐标（words:[{text,x,y,w,h}]）。
@@ -10,13 +9,6 @@ param(
     [Parameter(Mandatory = $true)][string]$Dir,
     [Parameter(Mandatory = $true)][string]$Out,
     [switch]$WithWords
-=======
-# 用法: powershell -File ocr_batch.ps1 -Dir <图片目录> -Out <结果json>
-# 为什么要批量：PowerShell 每次启动要几百毫秒，逐帧调用会慢十倍以上。
-param(
-    [Parameter(Mandatory = $true)][string]$Dir,
-    [Parameter(Mandatory = $true)][string]$Out
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,7 +51,6 @@ foreach ($f in $files) {
         $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
         $bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
         $res = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-<<<<<<< HEAD
         if ($WithWords) {
             # 每个词的包围盒（ocr_batch 以前只回文本，词坐标被丢掉）
             $words = New-Object System.Collections.Generic.List[object]
@@ -79,9 +70,6 @@ foreach ($f in $files) {
         } else {
             $results.Add([pscustomobject]@{ file = $f.Name; text = $res.Text })
         }
-=======
-        $results.Add([pscustomobject]@{ file = $f.Name; text = $res.Text })
->>>>>>> a85d267883743e2b264c8702f6b94fcd5f78480f
         $stream.Dispose()
     } catch {
         $results.Add([pscustomobject]@{ file = $f.Name; text = ""; error = "$($_.Exception.Message)" })
