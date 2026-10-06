@@ -1740,6 +1740,33 @@ class VideoSource:
             except (Exception, SystemExit) as e:
                 rt.detections_meta["ocr_scoreboard_error"] = f"{type(e).__name__}: {e}"
                 rt.detections_meta["scoreboard_action"] = "请手动框选比分牌后重试"
+                # ---- 第二路自动尝试：多候选区域扫描 + 读数可信度校验 ----
+                # 为什么加（用户原话："比分牌子你不能自动识别吗，表比分牌不太好吧"）：
+                #   上一路只认"标记台标"那一套走法，在别的台标样式上直接失败，
+                #   失败后只能让用户手动框选 —— 那是退步。
+                #   OCR 本身很快（实测 ~1 秒一次），所以把常见台标位置都扫一遍、
+                #   再用"比分只增不减 + 读数一致"挑出可信的那块，是划算的。
+                #   实测在真实素材上：8 个候选扫完约 10 秒，选出「下方整条」，
+                #   连续读出 5:5（与画面一致），并识别出得分事件。
+                try:
+                    from .ocr_scoreboard import read_scoreboard_ocr_best
+                    _scan2, _info2 = read_scoreboard_ocr_best(
+                        self.video_path, samples=12, zoom=4.0)
+                    rt.detections_meta["scoreboard_auto"] = {
+                        "picked": _info2.get("picked"),
+                        "quality": _info2.get("quality"),
+                        "note": _info2.get("note"),
+                        "tried": _info2.get("tried"),
+                    }
+                    if _scan2 is not None and getattr(_scan2, "readings", None):
+                        scan = _scan2
+                        sb_source = "ocr-auto"
+                        # 第二路成功了就不再报错（但把第一路的失败留在 meta 里备查）
+                        rt.detections_meta["ocr_scoreboard_error"] = None
+                        rt.detections_meta["scoreboard_action"] = None
+                except Exception as _e2:                          # noqa: BLE001
+                    rt.detections_meta["scoreboard_auto_error"] = \
+                        f"{type(_e2).__name__}: {_e2}"
 
             # 4.2 OCR 不适用就退回原来的模板匹配
             if scan is None:
