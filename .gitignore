@@ -104,3 +104,6 @@ Thumbs.db
 # 来源素材（ShotTracker 等）没有 LICENSE，公开仓库里不该出现；
 # 内容本身仍留在本机，需要看的时候直接打开本地文件。
 eval/review_drafts/
+data/calibration_*.json.bak
+data/calibration_*.json.bak1
+data/calibration_*.json.tmp
