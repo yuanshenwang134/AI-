@@ -1474,6 +1474,60 @@ def _video_duration(video_path: str) -> float:
     return 0.0
 
 
+def _build_multical_from_frames(per_frame_fit: list, video_path: str,
+                                W: int, H: int, duration: float = 0.0,
+                                cuts=None):
+    """用**每帧各自解出的 H** 拼成一份多镜头标定。
+
+    为什么需要（用户实测）：两幅画面（t=13.5s / t=73.06s）**各自都能标定**
+    （6 点、误差 1.32m / 1.08m），但混在一起解只剩 2 个一致的点 ——
+    因为它们根本不是同一个镜头。这正是"两台机位各拍半场"的用法。
+
+    这条回退**不依赖切镜检测**：只要"混在一起解不了、但每帧各自成立"，
+    就按每帧一份标定（各覆盖自己的时间段）。切镜检测在长视频上不一定可靠
+    （实测在用户的 HD 素材上没找到切镜点，于是整条路都没触发）。
+
+    时间段划分：优先用检测到的切镜时刻；没有就用相邻两个标点时刻的**中点**。
+    返回 MultiCal 或 None。
+    """
+    from .multical import MultiCal, Segment
+
+    good = [f for f in (per_frame_fit or [])
+            if f.get("ok") and f.get("H") and f.get("n", 0) >= 4]
+    if len(good) < 2:
+        return None
+    good = sorted(good, key=lambda f: float(f.get("t") or 0.0))
+    ts = [float(f["t"]) for f in good]
+    cuts = sorted(float(c) for c in (cuts or []))
+    segs = []
+    for i, f in enumerate(good):
+        t = float(f["t"])
+        if i == 0:
+            lo = 0.0
+        else:
+            mid = (ts[i] + ts[i - 1]) / 2.0
+            inside = [c for c in cuts if ts[i - 1] < c <= t]
+            lo = inside[-1] if inside else mid
+        if i == len(good) - 1:
+            hi = float(duration) if duration and duration > t else t + 9999.0
+        else:
+            mid = (ts[i] + ts[i + 1]) / 2.0
+            inside = [c for c in cuts if t < c <= ts[i + 1]]
+            hi = inside[0] if inside else mid
+        segs.append(Segment(
+            t_start=round(lo, 3), t_end=round(hi, 3),
+            src_px=[list(p) for p in (f.get("src_px") or [])],
+            dst_m=[list(d) for d in (f.get("dst_m") or [])],
+            H=list(f["H"]), frame="full",
+            names=list(f.get("names") or []),
+            rmse_m=float(f.get("rmse_m") or 0.0),
+            ratio=float(f.get("ratio") or 0.0),
+            method="web-keypoints-multi", n_points=int(f.get("n") or 0),
+            note="这一幅画面自己解出的标定"))
+    return MultiCal(segs, for_video=video_path, frame_size=[W, H],
+                    note="按画面分别解算（各自覆盖自己的时间段）")
+
+
 def _split_marks_by_shot(video_path: str, times: list) -> tuple:
     """把标点时刻按镜头分组（薄封装，方便测试时替换掉）。"""
     from .multical import split_times_by_shot
@@ -2812,6 +2866,8 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             continue
         s_f = [list(i[0]["px"]) for i in items]
         d_f = [list(i[1]) for i in items]
+        # 把点集和点名的标签也带上 —— 后面「按画面各自解算」要用它们建多镜头标定
+        n_f = [str(i[0].get("name") or "") for i in items]
         try:
             Hf = find_homography(s_f, d_f)
             e_f = []
@@ -2822,13 +2878,15 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             per_frame_fit.append({"t": tt, "n": len(items),
                                   "ok": r_f < 1.5, "rmse_m": round(r_f, 3),
                                   "H": Hf if r_f < 1.5 else None,
+                                  "src_px": s_f, "dst_m": d_f, "names": n_f,
                                   "note": ("这一帧自己就能标定（误差 %.2f m）"
                                            % r_f) if r_f < 1.5 else
                                           ("这一帧的点也不自洽（误差 %.2f m）"
                                            % r_f)})
         except Exception as e:  # noqa: BLE001
             per_frame_fit.append({"t": tt, "n": len(items), "ok": False,
-                                  "rmse_m": None,
+                                  "rmse_m": None, "src_px": s_f, "dst_m": d_f,
+                                  "names": n_f,
                                   "note": f"这一帧解不出：{e}"})
     # 有几幅画面自己就能标定（界面用它说明"你标的这两幅各自都成立"）
     # 具体用哪一幅解算由 _pick_calibration_homography 决定（取点的最多那一幅）。
@@ -2916,6 +2974,12 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
     # ---- 保存前的客观体检：退化（近共线/重合）+ 独立校验（画面里的真篮筐）----
     # 这两项是**必须**的：点几乎共线时 H 在这些点上是精确解（误差 0.00m），
     # 离开这条线就飞掉；而"整份标定位错"只有拿真值点（篮筐）才看得出来。
+    #
+    # `_merged_rmse/_merged_inliers` 记的是**合并解**的读数：
+    # 后面 `_pick_calibration_homography` 会把 rmse 换成"选中那一幅"的读数，
+    # 而判断"两幅是不是同一镜头"必须看**合并**的读数（实测踩到：用换过之后的
+    # rmse 判断，永远很小，于是多机位那条路走不到）。
+    _merged_rmse, _merged_inliers = float(rmse), int(n_inliers)
     cand = Calibration(name=vp.stem, method="web-keypoints-multi",
                        src_px=pick_src, dst_m=pick_dst, H=Hm,
                        reproj_error_m=round(rmse, 3),
@@ -3053,6 +3117,79 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                 "**最省事的做法：只在一幅画面上点 4~6 个点，然后直接「先预览」** ——"
                 "单幅画面自己就能解出标定，不需要凑两幅。"
                 "预览结果会点名哪几个点互相矛盾，照着改那几个就行。" % rmse)
+
+    # ★ 多机位：**两幅以上画面各自成立**，但混在一起不可用 → 按"每幅一份标定"。
+    #
+    # 这是用户的实际用法："一个镜头怎么可能看到全场啊，就是两个镜头标点"
+    # —— 一台机位拍不到全场，两个机位各拍半场。两个机位**没有共同坐标系**，
+    # 把两边的点揉成一份单应矩阵数学上不成立（实测 t=13.5s / t=73.06s 各自
+    # 6 点、误差 1.32m / 1.08m，合并后只剩 2 个一致的点）。
+    #
+    # ⚠️ 判据**不依赖切镜检测**：实测在用户的 HD 长视频上 `find_cut_between`
+    # 返回 None（`_sample` 取帧拿不到画面时会静默当"同一镜头"），
+    # 于是依赖它的那条 per-shot 路**整条没触发**，用户只看到"解不了"。
+    #
+    # ⚠️ 三个"合并不可用"的判据都要有（我第一版只写了后两个，于是漏掉退化那种：
+    # 退化时 rmse≈0 且内点不少，只有 `blocked` 才说明问题）：
+    #   ① `blocked` —— 退化 / 独立校验不过；
+    #   ② `rmse >= 1.5` —— 合并误差大；
+    #   ③ `n_inliers < 4` —— 只剩不到 4 个一致的点（用户实测就是这种）。
+    # ⚠️ 判据里 **`via == "single-frame"` 是最关键的一条**：
+    # `_pick_calibration_homography` 只有在"几幅画面不是同一镜头"时才会只选一幅
+    # （同一镜头它会合并成功）。而"不是同一镜头 + 每幅各自成立"正是**多机位**。
+    # 少了这一条，用户那两幅（各自 6 点都对）会被判成 single-frame，
+    # 于是只有镜头 A 的画面有标定、镜头 B 的画面完全没有 —— 半个场子没数据。
+    _good2 = [f for f in per_frame_fit
+              if f.get("ok") and f.get("H") and f.get("n", 0) >= 4]
+    if len(_good2) >= 2 and (blocked or _merged_rmse >= 1.5
+                             or _merged_inliers < 4 or via == "single-frame"):
+        try:
+            _mc2 = _build_multical_from_frames(
+                per_frame_fit, str(vp), W, H,
+                duration=_video_duration(str(vp)),
+                cuts=locals().get("cuts") or [])
+        except Exception as _e:                                # noqa: BLE001
+            _mc2 = None
+            comp_note = (comp_note + "；" if comp_note else "") + \
+                "多镜头标定构造失败：%s" % _e
+        if _mc2 is not None and len(_mc2.segments) >= 2:
+            rev2 = None
+            if bool(getattr(req, "confirm", False)):
+                out_p2 = _calibration_path_for(str(vp))
+                old_rev2 = 0
+                if out_p2.exists():
+                    try:
+                        old_rev2 = int((json.loads(
+                            out_p2.read_text(encoding="utf-8")) or {}
+                        ).get("revision") or 0)
+                    except Exception:                          # noqa: BLE001
+                        old_rev2 = 0
+                data2 = _mc2.to_dict()
+                data2["revision"] = old_rev2 + 1
+                data2["video_path"] = str(vp)
+                _write_calibration(out_p2, data2)
+                rev2 = old_rev2 + 1
+            return {
+                "ok": True, "multi_shot": True, "via": "per-frame",
+                "n_points": len(src), "n_segments": len(_mc2.segments),
+                "rmse_m": round(max(s.rmse_m for s in _mc2.segments), 3),
+                "segments": _mc2.summary()["segments"],
+                "saved": rev2 is not None, "revision": rev2,
+                "position_unverified": False,
+                "per_frame_fit": [{"t": f_.get("t"), "n": f_.get("n"),
+                                   "ok": f_.get("ok"),
+                                   "rmse_m": f_.get("rmse_m")}
+                                  for f_ in per_frame_fit],
+                "note": ("这 %d 幅画面**混在一起解不了**（跨镜头没有统一坐标系，"
+                         "合并解必然互相矛盾 —— 这是拍摄方式决定的，不是你点错了），"
+                         "但它们**各自都能标定** —— 已按「每幅画面一份标定」处理："
+                         "每份覆盖自己的时间段，分析时按帧所属镜头取对应的那份，"
+                         "最后在球场坐标里合并。%s"
+                         % (len(_good2),
+                            "、".join("t=%.1fs %d点 误差%.2fm"
+                                      % (f["t"], f["n"], f["rmse_m"])
+                                      for f in _good2))),
+            }
 
     if blocked:
         if comp_note:
