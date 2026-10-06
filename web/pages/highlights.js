@@ -79,6 +79,16 @@ window.PAGES['highlights'] = {
       var out = (c && c.path) ? c.path : 'highlights/clip_01.mp4';
       return 'ffmpeg -ss ' + Number(start).toFixed(1) + ' -to ' + Number(end).toFixed(1) +
         ' -i game.mp4 -c copy ' + out;
+    },
+    /** 原片播放地址（模板里用 `v-if="videoSrc"` + `:src="videoSrc"`）。
+     *
+     *  ⚠️ 必须放 computed，不能放 methods。以前它在 methods 里，于是模板拿到的是
+     *  **函数对象**：`v-if` 恒为真（`<video>` 一直渲染），`:src` 被设成一个函数
+     *  —— 播放器直接坏掉，而且不报错、看不出来。
+     *  这一类错误由 tests/test_template_uses_computed_not_methods.js 守着。 */
+    videoSrc: function () {
+      if (this.isDemo || !this.S.jobId) return '';
+      return window.API.jobVideoUrl(this.S.jobId);
     }
   },
   methods: {
@@ -94,10 +104,6 @@ window.PAGES['highlights'] = {
       if (!c || !c.available || !c.path) return false;
       // 绝对文件系统路径（如 D:\out\highlights\x.mp4）浏览器拿不到，只能走原始视频跳转
       return !!this.clipSrc(c);
-    },
-    videoSrc: function () {
-      if (this.isDemo || !this.S.jobId) return '';
-      return window.API.jobVideoUrl(this.S.jobId);
     },
     /* ------------------------------------------------------------------
        进球确认（人工判断 → 过滤误报 + 攒训练数据）

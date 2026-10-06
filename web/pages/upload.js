@@ -222,6 +222,43 @@ window.PAGES['upload'] = {
       if (!this.mfDualSplit) return this.mfPts.length;
       return (this.mfActive === 1 ? this.mfPtsRight : this.mfPtsHere).length;
     },
+    // ---- 「只点 4 个点」模式的点（**必须是 computed，不能放 methods**）----
+    //
+    // 为什么单独写这段注释：我一开始把这两个函数放进了 `methods`。模板里写
+    // `miniPtsHere`（不带括号）时，Vue 拿到的是**函数对象本身**，于是：
+    //   * `miniPtsHere.length` 读的是"函数的形参个数" = 0 → 槽位永远显示「未点」；
+    //   * `v-for="p in miniPtsHere"` 遍历一个函数 → 0 次迭代 → **画面上不画任何圈**。
+    // 而点其实全都记进了 mfMiniPts（所以点满 4 个之后守卫会拦住下一次点击）。
+    // 用户看到的就是"点完 4 个啥也点不了了，而且没有圈"（实测三症状同一根因）。
+    /** 左画面（mfCurrent）上的 4 点 */
+    miniPtsHere: function () {
+      var t = this.mfCurrent ? this.mfCurrent.t : null;
+      return this.mfMiniPts.filter(function (p) { return p.t === t; });
+    },
+    /** 右画面上的 4 点 */
+    miniPtsRight: function () {
+      var t = this.mfCurrentRight ? this.mfCurrentRight.t : null;
+      return this.mfMiniPts.filter(function (p) { return p.t === t; });
+    },
+    /** **当前正在点的那一面**上的 4 点 —— 槽位显示要用它。
+     *  以前槽位固定用 miniPtsHere（左帧），在右画面点时槽位全显示「未点」，
+     *  用户会以为没点上（实测 bug）。 */
+    miniPtsActive: function () {
+      if (!this.mfDualSplit) return this.mfMiniPts;
+      return this.mfActive === 1 ? this.miniPtsRight : this.miniPtsHere;
+    },
+    /** 「点吸附精修」被采纳时的点（模板要画成空心黄圈，供对照）。
+     *  ⚠️ 必须放 computed：放 methods 的话模板里 `snapPtsHere` 拿到的是函数对象，
+     *  `v-for` 迭代 0 次 → 画面上什么都不显示（我在这里犯过一次，
+     *  同类错误还有 miniPtsHere/miniPtsRight，见 tests/test_template_uses_computed_not_methods.js）。 */
+    snapPtsHere: function () {
+      var t = this.mfCurrent ? this.mfCurrent.t : null;
+      return (this.snapPts || []).filter(function (p) { return p.t === t; });
+    },
+    snapPtsRight: function () {
+      var t = this.mfCurrentRight ? this.mfCurrentRight.t : null;
+      return (this.snapPts || []).filter(function (p) { return p.t === t; });
+    },
     /** 另一个画面上的点（已不再用于渲染：右画面现在画 mfPtsRight。
      *  保留这段注释是为了记住踩过的坑：曾经右画面画的是"除左帧以外的所有点"，
      *  理由是"另一帧的坐标不通用、只当参照"，但那会让右画面的点出现在左画面上
@@ -910,15 +947,6 @@ window.PAGES['upload'] = {
       this.mfResult = null;
       this.$message.success('已清空 4 点');
     },
-    /** 当前画面上的 4 点（渲染用） */
-    miniPtsHere: function () {
-      var t = this.mfCurrent ? this.mfCurrent.t : null;
-      return this.mfMiniPts.filter(function (p) { return p.t === t; });
-    },
-    miniPtsRight: function () {
-      var t = this.mfCurrentRight ? this.mfCurrentRight.t : null;
-      return this.mfMiniPts.filter(function (p) { return p.t === t; });
-    },
     previewCourtMulti: function () {
       var self = this;
       // 「只点 4 点」模式：走 mini 通道（不给名字，后端自动定向）
@@ -1088,15 +1116,6 @@ window.PAGES['upload'] = {
       var W = frame ? frame.w : this.markSize.w;
       var Hh = frame ? frame.h : this.markSize.h;
       this._buildOverlay(H, W, Hh);
-    },
-    /** 本帧上"吸附后"的点（精修被采纳时才非空） */
-    snapPtsHere: function () {
-      var t = this.mfCurrent ? this.mfCurrent.t : null;
-      return (this.snapPts || []).filter(function (p) { return p.t === t; });
-    },
-    snapPtsRight: function () {
-      var t = this.mfCurrentRight ? this.mfCurrentRight.t : null;
-      return (this.snapPts || []).filter(function (p) { return p.t === t; });
     },
     toggleCourtOverlay: function () {
       this.showCourtOverlay = !this.showCourtOverlay;
@@ -2108,10 +2127,10 @@ window.PAGES['upload'] = {
     '      <div v-if="courtMini" class="row" style="align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">',
     '        <span class="hint">当前画面已点：</span>',
     '        <el-tag v-for="n in 4" :key="\'mq\'+n" size="small"',
-    '          :type="miniPtsHere.length >= n ? \'success\' : \'info\'" effect="plain">',
-    '          {{ n }}. {{ miniPtsHere[n-1] ? (\'(\' + miniPtsHere[n-1].x.toFixed(3) + \', \' + miniPtsHere[n-1].y.toFixed(3) + \')\') : \'未点\' }}',
+    '          :type="miniPtsActive.length >= n ? \'success\' : \'info\'" effect="plain">',
+    '          {{ n }}. {{ miniPtsActive[n-1] ? (\'(\' + miniPtsActive[n-1].x.toFixed(3) + \', \' + miniPtsActive[n-1].y.toFixed(3) + \')\') : \'未点\' }}',
     '        </el-tag>',
-    '        <el-button size="small" @click="miniClearHere" :disabled="!miniPtsHere.length">重点这一幅</el-button>',
+    '        <el-button size="small" @click="miniClearHere" :disabled="!miniPtsActive.length">重点这一幅</el-button>',
     '        <el-button size="small" @click="miniClearAll" :disabled="!mfMiniPts.length">全清</el-button>',
     '      </div>',
     // 自动定向结果：选中哪套地物、吻合度、候选排名 —— 如实展示，方便判断可不可信
@@ -2227,12 +2246,14 @@ window.PAGES['upload'] = {
     '                  fill="#22c55e" :font-size="Math.max(16, frameW*0.022)"',
     '                  style="paint-order:stroke;stroke:#000;stroke-width:3px">{{ i + 1 }}. {{ p.label }}</text>',
     '          </template>',
-    // 「只点 4 个点」模式：把点选顺序画出来（编号 1..4），用户才能确认顺序对不对
+    // 「只点 4 个点」模式：把点选顺序画出来（编号 1..4），用户才能确认顺序对不对。
+    // 用**绿色**（和点名模式一致）—— 用户已经习惯"绿圈=我点上了"，换成别的颜色
+    // 会被当成"没点上"（实测反馈："为什么点完点之后没有绿圈提示了"）。
     '          <template v-for="(p,i) in miniPtsHere" :key="\'M\'+i">',
     '            <circle :cx="p.x * frameW" :cy="p.y * frameH" :r="Math.max(11, frameW*0.013)"',
-    '                    fill="rgba(59,130,246,.35)" stroke="#3b82f6" :stroke-width="Math.max(2, frameW*0.0035)" />',
+    '                    fill="rgba(34,197,94,.35)" stroke="#22c55e" :stroke-width="Math.max(2, frameW*0.0035)" />',
     '            <text :x="p.x * frameW + Math.max(13, frameW*0.015)" :y="p.y * frameH"',
-    '                  fill="#3b82f6" :font-size="Math.max(18, frameW*0.024)"',
+    '                  fill="#22c55e" :font-size="Math.max(18, frameW*0.024)"',
     '                  style="paint-order:stroke;stroke:#000;stroke-width:3px">{{ p.seq }}</text>',
     '          </template>',
     // 精修被采纳时，把"吸附后"的点也画出来（空心黄圈）——存下来的标定用的是它。
@@ -2277,9 +2298,9 @@ window.PAGES['upload'] = {
     '          </template>',
     '          <template v-for="(p,i) in miniPtsRight" :key="\'MR\'+i">',
     '            <circle :cx="p.x * frameW" :cy="p.y * frameH" :r="Math.max(11, frameW*0.013)"',
-    '                    fill="rgba(59,130,246,.35)" stroke="#3b82f6" :stroke-width="Math.max(2, frameW*0.0035)" />',
+    '                    fill="rgba(34,197,94,.35)" stroke="#22c55e" :stroke-width="Math.max(2, frameW*0.0035)" />',
     '            <text :x="p.x * frameW + Math.max(13, frameW*0.015)" :y="p.y * frameH"',
-    '                  fill="#3b82f6" :font-size="Math.max(18, frameW*0.024)"',
+    '                  fill="#22c55e" :font-size="Math.max(18, frameW*0.024)"',
     '                  style="paint-order:stroke;stroke:#000;stroke-width:3px">{{ p.seq }}</text>',
     '          </template>',
     '          <template v-if="showCourtOverlay">',

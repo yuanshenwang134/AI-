@@ -124,4 +124,26 @@ const FOUR = [[0.20, 0.40], [0.60, 0.40], [0.65, 0.70], [0.25, 0.70]];
   console.log('⑦ 两个画面都渲染 4 点与序号  ✅');
 }
 
+// ⑧ **miniPtsHere 必须是 computed，不能是 method**
+//    这是我犯过的错：放 methods 里时，模板拿到的是**函数对象**，于是
+//      * `miniPtsHere.length` 读的是形参个数 = 0 → 槽位永远显示「未点」；
+//      * `v-for="p in miniPtsHere"` → 0 次迭代 → 画面上不画任何圈；
+//      * 点其实都记下了（所以点满 4 个后守卫会拦住下一次点击）。
+//    用户看到的"点完 4 个啥也点不了了、而且没有圈"就是这一个根因。
+{
+  const vm = readyVm();
+  vm.mfFrames = [{ t: 10.0, w: 854, h: 480, image: 'x' },
+                 { t: 20.0, w: 854, h: 480, image: 'x' }];
+  vm.mfIdx = 0; vm.mfIdx2 = 1; vm.mfActive = 1;
+  FOUR.forEach(([x, y]) => click(vm, 1, x, y));   // 点在**右**画面
+  assert.ok(Array.isArray(vm.miniPtsHere),
+    'miniPtsHere 必须是数组（computed），不是函数');
+  assert.ok(Array.isArray(vm.miniPtsRight), 'miniPtsRight 必须是数组');
+  assert.ok(Array.isArray(vm.miniPtsActive), 'miniPtsActive 必须是数组');
+  assert.equal(vm.miniPtsRight.length, 4, '右画面应有 4 个点');
+  assert.equal(vm.miniPtsActive.length, 4,
+    'miniPtsActive 要跟着"正在点的那一面"（右）—— 否则槽位会错显示为未点');
+  console.log('⑧ miniPts* 是数组、且跟随当前画面  ✅');
+}
+
 console.log('\n4 点模式（courtMini）：载荷有序、切换清空、渲染齐全（checks passed）');
