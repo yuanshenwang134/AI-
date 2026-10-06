@@ -1495,10 +1495,23 @@ class VideoSource:
                     stride=self.sliding_stride,
                     max_seconds=self.sliding_max_seconds,
                     progress=lambda p, m="": step(0.63 + 0.06 * p, m))
+                # ⚠️ 这里刻意**不存全部 anchors**（上千个，塞进 detections_meta 太肥），
+                # 但必须留**几个样本**：否则事后就没法验证"这套 H 投出来合不合理"——
+                # 实测就是因为锚点被剔了，pipeline 里那道合理性检查拿不到 H，
+                # 只能干看着坏标定往下走（球员坐标全被压到边线上）。
+                _anch = self.sliding.get("anchors") or []
+                _sample = ([_anch[0]] if _anch else []) + \
+                          ([_anch[len(_anch) // 2]] if len(_anch) > 2 else []) + \
+                          ([_anch[-1]] if len(_anch) > 1 else [])
                 rt.detections_meta["sliding_calibration"] = {
                     k: v for k, v in self.sliding.items() if k != "anchors"}
-                rt.detections_meta["sliding_anchors"] = len(
-                    self.sliding.get("anchors") or [])
+                # 样本只保留判合理性需要的字段（帧号 + 四角 + 分数）
+                rt.detections_meta["sliding_calibration"]["anchors"] = [
+                    {kk: a.get(kk) for kk in ("frame", "corners", "ratio", "kind")
+                     if kk in a} for a in _sample]
+                rt.detections_meta["sliding_calibration"]["anchors_truncated"] = (
+                    len(_anch) > len(_sample))
+                rt.detections_meta["sliding_anchors"] = len(_anch)
             except Exception as e:  # noqa: BLE001
                 rt.detections_meta["sliding_error"] = f"{type(e).__name__}: {e}"
 

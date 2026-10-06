@@ -309,6 +309,13 @@ def run_pipeline(rt: RawTrack, cfg: Optional[PipelineConfig] = None,
     tactics_frames: list[dict] = []
     # 球员坐标能不能用？两条路：① 已通过校验的静态标定；② 自动逐帧标定（兜底，标注未校验）
     sliding_ok, sliding_why = _sliding_position_ok(meta)
+    # ②之前先查它给的 H 本身合不合理：sliding 的分数（ratio/达标率）会骗人，
+    #   实测自称 10.96/1.000，投出来却是 y 跨度 71m、x 全挤在边线上。
+    if sliding_ok:
+        _h_ok, _h_why = _sliding_homography_sane(meta)
+        if not _h_ok:
+            sliding_ok = False
+            sliding_why = _h_why
     pos_via_sliding = bool(not cal_usable and sliding_ok)
     # 最后一道闸：坐标自身在物理上说得通吗？
     # 分数（ratio/达标率）会骗人（实测 sliding 自称 14.5 / 0.999，坐标却把 90% 的
@@ -620,6 +627,76 @@ def _tactics_coords_sane(player_track) -> tuple[bool, str]:
         "不是球员真的挤在边线上。为避免给你一张错的俯视图，这次不出战术图。"
         "修法：在「上传与分析」页重新标一次球场，标完看「吻合度读数」是否 ≥1.25。"
         % "；".join(problems))
+
+
+def _sliding_homography_sane(meta: dict) -> tuple[bool, str]:
+    """自动逐帧标定给出的 H，投出来的坐标**落在合理球场范围内**吗？
+
+    为什么必须有这一道（实测）：sliding 自称 median_ratio=10.96、达标率 1.000，
+    但有 1080 个锚点的那次，把**画面四角**投进去得到：
+
+        (0,0)→(7.2,-17.5)  (854,0)→(7.5,-76.9)
+        (854,480)→(7.5,-13.5)  (0,480)→(6.3,-5.5)
+
+    x 全挤在 6.3~7.5、y 跨度 71m（球场才 28m）—— 标定的目标点明明是
+    折半坐标（x∈±7.5、y∈0~14），却投出这种结果，说明它锁定的四角是错的
+    （实测那一帧四角只占画面 20.7%，是条细长对角带，根本不是半场）。
+
+    判据（**故意定得很宽**）：只拦"离谱到不可能是相机视野"的情况。
+    实测三种标定的画面四角落点范围：
+
+        良好(auto t=60s)  |x|max  6.8   |y|max 12.7
+        良好(t=5s 那帧)   |x|max 21.0   |y|max 55.9
+        坏(事故那次 t=0)  |x|max  7.5   |y|max 76.8
+
+    "良好"的那份也能到 55.9 —— 说明**这个判据区分能力有限**，定紧了会误杀。
+    所以这里只拦 |x|>40 或 |y|>60 这种极端值，作为"早发现"的辅助；
+    **真正的兜底是下游 _tactics_coords_sane**（直接看战术图要用的那批坐标，
+    判据是"某轴 >70% 的点贴在边界上"，实测能准确拦住这份坏标定）。
+    """
+    sl = meta.get("sliding_calibration") or {}
+    n_anchors = int(meta.get("sliding_anchors") or 0)
+    if n_anchors <= 0:
+        return True, ""                      # 没跑这条路径，不判
+    anchors = sl.get("anchors") or []
+    w = int(meta.get("width") or 0)
+    h = int(meta.get("height") or 0)
+    if not anchors or w <= 0 or h <= 0:
+        # 没有锚点样本就没证据（老产物就是这样，只有统计量）——
+        # **没有证据就不拦**，真正兜底的是下游 _tactics_coords_sane
+        # （它只看坐标分布，不依赖锚点）。
+        return True, ""
+    try:
+        from .court import (HALF_COURT_CORNERS, FULL_COURT_CORNERS,
+                            apply_homography, find_homography)
+        dst_c = (HALF_COURT_CORNERS if sl.get("half_court", True)
+                 else FULL_COURT_CORNERS)
+        checks = []
+        for a in anchors:
+            corners = a.get("corners")
+            if not corners or len(corners) != 4:
+                continue
+            try:
+                H = find_homography([list(p) for p in corners],
+                                    [list(p) for p in dst_c])
+            except Exception:                # noqa: BLE001
+                continue
+            for (px, py) in ((0, 0), (w, 0), (w, h), (0, h)):
+                x, y = apply_homography(H, px, py)
+                checks.append((float(x), float(y)))
+        if not checks:
+            return True, ""                  # 算不出 -> 无证据，不拦
+        bad = [(x, y) for (x, y) in checks if abs(x) > 40 or abs(y) > 60]
+    except Exception:                        # noqa: BLE001
+        return True, ""                      # 判不了就不拦，交给下游其他检查
+    if not bad:
+        return True, ""
+    f = bad[0]
+    return False, (
+        "自动逐帧标定给出的坐标**离谱到不可能是球场**（把画面四角投进去得到 "
+        "x=%.1f、y=%.1f；球场只有 15m×28m，相机视野再宽也到不了这个量级）。"
+        "说明它锁定的球场四角是错的。球员位置会被压到边线上，"
+        "这份自动标定不能用来出战术图。" % (f[0], f[1]))
 
 
 def _judgement(meta: dict, shots: list) -> dict:

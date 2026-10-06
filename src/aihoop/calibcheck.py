@@ -219,6 +219,243 @@ def frame_fit_detail(bgr, cal: Calibration, n_samples: int = 40) -> dict:
             "n_on_line": len(on), "n_floor": len(rnd)}
 
 
+def refine_keypoints(frames: list, landmark_map: Optional[dict] = None,
+                     max_shift_px: float = 12.0,
+                     passes: int = 2, step_px: float = 4.0):
+    """把用户标的特征点**吸附到画面里的球场线**上（微调，不重标）。
+
+    为什么需要（用户实测的核心卡点）：
+      手工标点很难精确到几个像素，而分析端的准入门槛是"投影线与画面白线的
+      吻合度 ratio ≥ 1.25"。实测用户那 6 个点几何上是对的（罚球区 paint=59），
+      但底线/边线差一点（bottom=3、sideline 38/52），总分只有 1.02 —— 于是
+      热区、战术图、球权全部拿不到。用户的原话是"改啊"，也就是**要工具自己解决**，
+      而不是让他反复重标。
+
+    做法：以「投影线落在亮脊上的比例」为目标（frame_fit_detail 的 ratio），
+    对每个点在其邻域内做小范围网格搜索 + 逐点贪心，取让目标最大的偏移。
+    只用**用户已经给的帧**，不引入新数据；位移上限 max_shift_px（默认 12px），
+    避免把点拽到别的线上去。
+
+    frames: [{"bgr": ndarray, "landmarks": {名字: [x_norm, y_norm]}}, ...]
+    返回 {"landmarks": 精修后的（归一化）, "before": 原 ratio, "after": 新 ratio,
+          "moved_px": {名字: 像素位移}, "passes": 实际轮数, "note": 说明}
+    """
+    import numpy as np
+    from .court import Calibration, find_homography
+    # 点名的球场坐标表由调用方传入（api.py 里那张 COURT_LANDMARKS）。
+    # 不做成内部 import：api.py 会 import calibcheck，反向 import 就成环了。
+    landmark_table = landmark_map or {}
+    if not landmark_table:
+        return {"landmarks": {}, "before": 0.0, "after": 0.0, "moved_px": {},
+                "passes": 0, "note": "未给点名坐标表，未做精修"}
+
+    if not frames:
+        return {"landmarks": {}, "before": 0.0, "after": 0.0, "moved_px": {},
+                "passes": 0, "note": "没有可用画面，未做精修"}
+
+    # 统一点名集合（每帧标了哪些就用哪些）
+    names = []
+    for f in frames:
+        for k in f.get("landmarks") or {}:
+            if k not in names:
+                names.append(k)
+    if not names:
+        return {"landmarks": {}, "before": 0.0, "after": 0.0, "moved_px": {},
+                "passes": 0, "note": "没有特征点，未做精修"}
+
+    from .api import COURT_LANDMARKS  # 延后导入避免环
+    orig = {}
+    for k in names:
+        for f in frames:
+            lm = (f.get("landmarks") or {}).get(k)
+            if lm:
+                orig[k] = [float(lm[0]), float(lm[1])]
+                break
+    cur = {k: list(v) for k, v in orig.items()}
+
+    def score(pts: dict) -> float:
+        """所有帧的吻合度中位数（对单帧异常更稳）。"""
+        vals = []
+        for f in frames:
+            bgr = f.get("bgr")
+            if bgr is None:
+                continue
+            h, w = bgr.shape[:2]
+            lm = f.get("landmarks") or {}
+            src, dst = [], []
+            for k in names:
+                if k not in lm:
+                    continue
+                p = pts.get(k)
+                if not p:
+                    continue
+                src.append([p[0] * w, p[1] * h])
+                dst.append(list(landmark_table[k]))
+            if len(src) < 4:
+                continue
+            try:
+                Hm = find_homography(src, dst)
+                # ⚠️ 这里**不能**把 Hm 转成 np.ndarray：Calibration.to_pixel 里写的是
+                # `inv = invert(self.H) if self.H else None`，而 numpy 数组的真值判断
+                # 会抛 "truth value of an array is ambiguous" —— 精修器会因此静默
+                # 一步不动（实测：位移全是 0）。传 list 就没这个问题。
+                cal = Calibration(name="snap", method="snap", src_px=src,
+                                  dst_m=dst, H=list(Hm), frame="full",
+                                  frame_size=[w, h])
+                d = frame_fit_detail(bgr, cal)
+            except Exception:                       # noqa: BLE001
+                continue
+            r = d.get("ratio")
+            if isinstance(r, (int, float)) and r > 0:
+                vals.append(float(r))
+        if not vals:
+            return 0.0
+        return float(np.median(vals))
+
+    before = score(cur)
+    best = dict(cur)
+    best_score = before
+    used_passes = 0
+    half = max(1.0, float(max_shift_px))
+    steps = [s for s in (step_px, step_px / 2.0, step_px / 4.0) if s > 0.4]
+    for p_i in range(max(1, int(passes))):
+        used_passes = p_i + 1
+        improved = False
+        for k in names:
+            base = best.get(k)
+            if not base:
+                continue
+            # 以当前最优为中心做小网格
+            cands = []
+            for dx in (-half, -half / 2, 0.0, half / 2, half):
+                for dy in (-half, -half / 2, 0.0, half / 2):
+                    cands.append((dx, dy))
+            local_best = list(base)
+            local_score = best_score
+            for (dx, dy) in cands:
+                if dx == 0.0 and dy == 0.0:
+                    continue
+                trial = {kk: list(vv) for kk, vv in best.items()}
+                # 位移以**原始点**为基准限幅，防止越走越远
+                o = orig.get(k, base)
+                trial[k] = [o[0] + dx / 1000.0, o[1] + dy / 1000.0]
+                s = score(trial)
+                if s > local_score + 1e-6:
+                    local_score = s
+                    local_best = trial[k]
+            if local_best != base:
+                best[k] = local_best
+                best_score = local_score
+                improved = True
+        half = max(1.0, half / 2.0)          # 每轮收缩搜索半径
+        if not improved:
+            break
+
+    moved = {}
+    for k in names:
+        o = orig.get(k)
+        if not o:
+            continue
+        for f in frames:
+            bgr = f.get("bgr")
+            if bgr is None:
+                continue
+            h, w = bgr.shape[:2]
+            dx = (best[k][0] - o[0]) * w
+            dy = (best[k][1] - o[1]) * h
+            moved[k] = round(float((dx * dx + dy * dy) ** 0.5), 1)
+            break
+
+    # ---- 护栏：精修结果必须**几何上仍然像球场**，否则回退到原始点 ----
+    #
+    # 为什么必须有（实测踩到）：这一机位几乎是正对球场，场地在画面里是个很扁的
+    # 梯形 —— 这种视角下单应矩阵**天然病态**，纵深方向几乎没有信息。
+    # 于是"把点挪到最亮处"这个目标会被退化解满足：实测吻合度从 1.20 冲到 74.0
+    # （正常标定在真实画面上只有 1.3~2.3），点只移了 4~12 像素，但球场整体已经歪了。
+    # 用一个坏目标自动改用户的点，等于在骗分数 —— 所以这里加验收，不合格就**不动**。
+    why = ""
+    if _snapped_geometry_sane(best, frames, landmark_table, orig):
+        final, final_score = best, best_score
+    else:
+        final, final_score = dict(orig), before
+        why = "；精修结果几何上不像球场（这机位太正对、单应矩阵病态），已保留你原来标的点"
+    moved = {k: (0.0 if not why else moved.get(k, 0.0)) for k in moved}
+    note = ("精修：吻合度 %.2f → %.2f（点最多移动 %.1f 像素）%s"
+            % (before, final_score, max(moved.values()) if moved else 0.0, why))
+    return {"landmarks": {k: [round(v[0], 5), round(v[1], 5)]
+                          for k, v in final.items()},
+            "before": round(before, 3), "after": round(final_score, 3),
+            "moved_px": moved, "passes": used_passes,
+            "accepted": not why, "note": note}
+
+
+def _snapped_geometry_sane(pts: dict, frames: list, landmark_table: dict,
+                           orig: dict) -> bool:
+    """精修后的点解出的球场，几何上还说得通吗？
+
+    三条硬约束（都来自"这必须是个球场"这个事实）：
+      ① 吻合度不能是退化解那种离谱值（实测退化解 74.0；正常 1.3~2.3；
+         放宽到 12 已经很宽容）；
+      ② 投影出来的球场在画面里要有合理大小（不能缩成一条线）；
+      ③ 每个点相对原始位置的位移不能超过 20 像素。
+    """
+    import numpy as np
+    from .court import Calibration, find_homography
+    for f in frames:
+        bgr = f.get("bgr")
+        if bgr is None:
+            continue
+        h, w = bgr.shape[:2]
+        lm = f.get("landmarks") or {}
+        src, dst = [], []
+        for k in pts:
+            if k not in lm or k not in landmark_table:
+                continue
+            src.append([pts[k][0] * w, pts[k][1] * h])
+            dst.append(list(landmark_table[k]))
+        if len(src) < 4:
+            return False
+        try:
+            Hm = find_homography(src, dst)
+            cal = Calibration(name="chk", method="chk", src_px=src, dst_m=dst,
+                              H=list(Hm), frame="full", frame_size=[w, h])
+            d = frame_fit_detail(bgr, cal)
+            r = d.get("ratio")
+        except Exception:                                # noqa: BLE001
+            return False
+        # ① 退化解比值离谱
+        if not isinstance(r, (int, float)) or r > 12.0:
+            return False
+        # ② 投影出的球场要有合理大小（用四角在画面里的包围盒衡量）
+        try:
+            c = [cal.to_pixel(*p) for p in ((-7.5, 0.0), (7.5, 0.0),
+                                            (7.5, -14.0), (-7.5, -14.0))]
+            xs = [float(p[0]) for p in c]
+            ys = [float(p[1]) for p in c]
+            if not np.all(np.isfinite(xs + ys)):
+                return False
+            if (max(xs) - min(xs)) < w * 0.15 or (max(ys) - min(ys)) < h * 0.08:
+                return False
+        except Exception:                                # noqa: BLE001
+            return False
+    # ③ 位移上限
+    for k, v in pts.items():
+        o = orig.get(k)
+        if not o:
+            continue
+        for f in frames:
+            bgr = f.get("bgr")
+            if bgr is None:
+                continue
+            h, w = bgr.shape[:2]
+            dx = (v[0] - o[0]) * w
+            dy = (v[1] - o[1]) * h
+            if (dx * dx + dy * dy) ** 0.5 > 20.0:
+                return False
+            break
+    return True
+
+
 def court_fit_score(video_path: str, cal: Calibration,
                     times: Optional[Sequence[float]] = None,
                     n_samples: int = 50) -> dict:

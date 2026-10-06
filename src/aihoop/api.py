@@ -1403,6 +1403,26 @@ COURT_LANDMARKS = {
 }
 
 
+def _frame_bgr(vp: Path, at: float):
+    """取某一时刻的画面（BGR ndarray），失败返回 None。
+
+    抓帧在别处是"cv2 失败就用 ffmpeg 兜底"，这里只做精修用的目标帧，
+    所以只走 cv2（精修本来就不该因为抓帧失败而影响正常解算）。
+    """
+    import cv2
+    try:
+        cap = cv2.VideoCapture(str(vp))
+        if not cap.isOpened():
+            return None
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, int(round(float(at) * fps))))
+        ok, fr = cap.read()
+        cap.release()
+        return fr if ok else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _calibration_path_for(video: str) -> Path:
     import re
     stem = re.sub(r"[^0-9A-Za-z_.-]+", "_", Path(video).stem)[:40]
@@ -2209,6 +2229,12 @@ class MultiCalibRequest(BaseModel):
     # revision = 乐观锁：与已存标定的 revision 不一致就 409。
     confirm: bool = False
     revision: Optional[int] = None
+    # 是否顺手做"点吸附到球场线"的精修（默认开）。
+    # 为什么要有：手工标点很难精确到几个像素，而分析端的准入是"吻合度 ≥1.25"。
+    # 实测用户那 6 个点几何上是对的，但底线/边线差一点，总分只有 1.02 → 热区/战术图全被拒。
+    # ⚠️ 但它**带护栏**：精修结果必须几何上仍像球场才采纳，否则原样保留用户的点
+    # （实测这机位太正对、单应病态，精修会把吻合度刷到 74 的退化解 —— 那种一律拒绝）。
+    snap: bool = True
 
 
 class AutoCalibRequest(BaseModel):
@@ -2370,6 +2396,63 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             400, f"至少要点 4 个场地特征点（现在 {len(src)} 个）—— "
                  "几个画面上的点会累加在一起算。"
                  + (comp_note and ("当前：" + comp_note) or ""))
+
+    # ---- 「点吸附到球场线」精修（可选，默认开）----
+    # 位置：必须在拿到各帧的 bgr 之后、解 H 之前 —— 精修要拿画面当目标函数。
+    # 失败/被护栏拒绝都不影响正常解算，所以整段包在 try 里。
+    snap_info = None
+    if getattr(req, "snap", True) and req.frames:
+        try:
+            from .calibcheck import refine_keypoints
+            snaps = []
+            for fr in req.frames:
+                lm = fr.get("landmarks") or {}
+                t = float(fr.get("t") or 0.0)
+                norm = {}
+                for k, v in lm.items():
+                    if isinstance(v, dict):
+                        v = v.get("value") or v.get("xy")
+                    if v and len(v) >= 2 and k in COURT_LANDMARKS:
+                        norm[k] = [float(v[0]), float(v[1])]
+                if len(norm) < 4:
+                    continue
+                bgr = _frame_bgr(vp, t)
+                if bgr is None:
+                    continue
+                snaps.append({"bgr": bgr, "landmarks": norm, "t": t})
+            if snaps:
+                snap_info = refine_keypoints(snaps, landmark_map=COURT_LANDMARKS)
+                # 只在**被采纳**时替换点集：护栏拒绝时 snap_info["accepted"] 为 False，
+                # landmarks 原样退回，不会动用户标的点。
+                if snap_info.get("accepted"):
+                    new_by_t = {round(float(f["t"]), 2): snap_info["landmarks"]
+                                for f in snaps}
+                    # 按帧替换：src/dst 是按帧顺序收集的，这里重建一遍
+                    src, dst, tags = [], [], []
+                    for fr in req.frames:
+                        lm = fr.get("landmarks") or {}
+                        t = round(float(fr.get("t") or 0.0), 2)
+                        use = new_by_t.get(t) or {}
+                        for name, xy in lm.items():
+                            if name not in COURT_LANDMARKS or not xy:
+                                continue
+                            lab = None
+                            if isinstance(xy, dict):
+                                lab = xy.get("label")
+                                xy = xy.get("value") or xy.get("xy")
+                            if not xy or len(xy) < 2:
+                                continue
+                            if name in use:
+                                xy = use[name]
+                            src.append([float(xy[0]) * W, float(xy[1]) * H])
+                            dst.append(list(COURT_LANDMARKS[name]))
+                            tags.append({"name": name,
+                                         "label": lab or name,
+                                         "t": t})
+        except Exception as e:  # noqa: BLE001  精修失败绝不能影响正常解算
+            snap_info = {"accepted": False,
+                         "note": f"精修没跑成（{type(e).__name__}: {e}），用你标的点"}
+
     via = "dlt"
     try:
         Hm = find_homography(src, dst)
@@ -2757,6 +2840,10 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             # 怀疑软件坏了。这里用 leave-one-out 交叉验证把责任点点名。
             "point_diagnosis": (point_diag if (point_diag or {}).get("enough")
                                 else None),
+            # 「点吸附到球场线」精修的结果：采纳了没有、吻合度前后对比、各点移了几像素。
+            # 拒绝时（accepted=False）点集根本没动，界面要如实说"保留了你的点"，
+            # 而不是假装精修过了。
+            "snap": snap_info,
             "hoop_error_m": (round(hoop_err2, 2) if hoop_err2 is not None else None),
             "position_unverified": bool(tolerant),
             "n_points": n_used,

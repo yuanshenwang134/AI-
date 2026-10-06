@@ -115,6 +115,7 @@ window.PAGES['upload'] = {
       overlayW: 0,
       overlayH: 0,
       overlayLines: [],        // [[[x,y],...], ...] 画面像素坐标
+      snapPts: [],             // 「点吸附精修」被采纳时的点（画成空心圈，供对照）
       // ---- 新手上手（onboard）----
       // 目标：让第一次拿到软件的人在 5 分钟内看到一份结果，而不是对着表单发愣。
       // 关闭状态记在 localStorage：看过就不再烦他，但可以随时重新打开。
@@ -935,6 +936,23 @@ window.PAGES['upload'] = {
     refreshOverlay: function () {
       var r = this.mfResult || this.courtResult;
       var H = r && r.H;
+      // 「点吸附精修」被采纳时，存下来的标定用的是**吸附后的点**。
+      // 所以画面上必须也把吸附后的位置画出来（画成空心圈），
+      // 否则用户看到的点和他实际存下来的标定不一致 —— 会以为工具偷偷改了位置。
+      var snapPts = null;
+      var sn = r && r.snap;
+      if (sn && sn.accepted && sn.landmarks) {
+        var byT = {};
+        (this.mfPts || []).forEach(function (p) { byT[p.t] = byT[p.t] || {}; byT[p.t][p.name] = p; });
+        snapPts = [];
+        Object.keys(byT).forEach(function (tt) {
+          Object.keys(byT[tt]).forEach(function (nm) {
+            var v = sn.landmarks[nm];
+            if (v) { snapPts.push({ t: Number(tt), name: nm, x: v[0], y: v[1] }); }
+          });
+        });
+      }
+      this.snapPts = snapPts || [];
       if (!this.showCourtOverlay || !H) { this.overlayLines = []; return; }
       var t = null, frame = null, i;
       if (this.mfFrames && this.mfFrames.length) {
@@ -949,6 +967,15 @@ window.PAGES['upload'] = {
       var W = frame ? frame.w : this.markSize.w;
       var Hh = frame ? frame.h : this.markSize.h;
       this._buildOverlay(H, W, Hh);
+    },
+    /** 本帧上"吸附后"的点（精修被采纳时才非空） */
+    snapPtsHere: function () {
+      var t = this.mfCurrent ? this.mfCurrent.t : null;
+      return (this.snapPts || []).filter(function (p) { return p.t === t; });
+    },
+    snapPtsRight: function () {
+      var t = this.mfCurrentRight ? this.mfCurrentRight.t : null;
+      return (this.snapPts || []).filter(function (p) { return p.t === t; });
     },
     toggleCourtOverlay: function () {
       this.showCourtOverlay = !this.showCourtOverlay;
@@ -1859,6 +1886,13 @@ window.PAGES['upload'] = {
     '      :type="fitRatio >= 1.25 ? \'success\' : \'warning\'"',
     '      :title="\'吻合度读数：\' + (mfResult.calibration_fit.ratio != null ? mfResult.calibration_fit.ratio : \'—\') + \'（门槛 1.25）\' + (fitRatio >= 1.25 ? \' —— 这份标定会被分析端接受，战术图/热图能出\' : \' —— 太低，分析端会拒收：战术图、热图、2/3 分区分都不会生成（只判进球）\')"',
     '      description="这个数字是「把球场线投回画面、量它压在白线上的比例」。低于 1.25 时请开上面的叠加层，看看红线整体偏到哪去了，重新点几个更准的点（优先四角）。" />',
+    // 「点吸附精修」的结果：采纳了没有、吻合度前后对比。
+    // 为什么必须显式区分"采纳/没采纳"：护栏拒绝时点集**根本没动**，
+    // 若只显示一个"已精修"的绿条，用户会以为点被改过（实测这机位就会被拒）。
+    '    <el-alert v-if="markKind===\'court\' && mfResult && mfResult.snap && mfResult.snap.note" :closable="false" show-icon style="margin-bottom:6px"',
+    '      :type="mfResult.snap.accepted ? \'success\' : \'info\'"',
+    '      :title="(mfResult.snap.accepted ? \'点吸附精修：已采纳 —— \' : \'点吸附精修：没有采纳（保留了你自己标的点）—— \') + mfResult.snap.note"',
+    '      description="工具会试着把你标的点吸附到画面里的球场线上（位移上限 12 像素），但只有在结果**几何上仍像球场**时才采纳。被拒不是出错：说明这个机位太正对球场，单应矩阵本身就病态 —— 点挪几个像素就能让吻合度虚高到几十，那种解一律不用。" />',
     // 外层盒子宽度 = min(100%, 画面宽)；图片 width:100% 撑满它。
     // 这样"图片显示尺寸"和"定位容器尺寸"严格相等，绿圈才会落在鼠标点上。
     // ---- 球场模式：画面切换 + 特征点选择（多画面累加）----
@@ -2047,6 +2081,12 @@ window.PAGES['upload'] = {
     '                  fill="#22c55e" :font-size="Math.max(16, frameW*0.022)"',
     '                  style="paint-order:stroke;stroke:#000;stroke-width:3px">{{ i + 1 }}. {{ p.label }}</text>',
     '          </template>',
+    // 精修被采纳时，把"吸附后"的点也画出来（空心黄圈）——存下来的标定用的是它。
+    '          <template v-for="(p,i) in snapPtsHere" :key="\'S\'+i">',
+    '            <circle :cx="p.x * frameW" :cy="p.y * frameH" :r="Math.max(11, frameW*0.013)"',
+    '                    fill="none" stroke="#f59e0b" :stroke-width="Math.max(2, frameW*0.0035)"',
+    '                    stroke-dasharray="4 3" />',
+    '          </template>',
     // 标定自检：把这份 H 算出来的球场线画回画面（对不上就是对不上，一眼可见）
     '          <template v-if="showCourtOverlay">',
     '            <polyline v-for="(ln,li) in overlayLines" :key="\'ov\'+li"',
@@ -2075,6 +2115,11 @@ window.PAGES['upload'] = {
     '            <text :x="p.x * frameW + Math.max(12, frameW*0.014)" :y="p.y * frameH"',
     '                  fill="#22c55e" :font-size="Math.max(16, frameW*0.022)"',
     '                  style="paint-order:stroke;stroke:#000;stroke-width:3px">{{ i + 1 }}. {{ p.label }}</text>',
+    '          </template>',
+    '          <template v-for="(p,i) in snapPtsRight" :key="\'SR\'+i">',
+    '            <circle :cx="p.x * frameW" :cy="p.y * frameH" :r="Math.max(11, frameW*0.013)"',
+    '                    fill="none" stroke="#f59e0b" :stroke-width="Math.max(2, frameW*0.0035)"',
+    '                    stroke-dasharray="4 3" />',
     '          </template>',
     '          <template v-if="showCourtOverlay">',
     '            <polyline v-for="(ln,li) in overlayLines" :key="\'ovr\'+li"',
