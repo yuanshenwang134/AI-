@@ -1,4 +1,4 @@
-﻿# ============================================================================
+# ============================================================================
 #  AI 篮球分析软件 · 一键打开演示
 #  ---------------------------------------------------------------------------
 #  为什么需要这个脚本：
@@ -93,6 +93,12 @@ if ($port -eq 0) {
     exit 1
 }
 $Url = "http://127.0.0.1:$port/web/index.html"
+# 打开时带一个时间戳参数：**双保险**
+# 为什么需要：index.html 是"引用所有前端脚本的那张表"，被浏览器缓存住的话，
+# 新写的 upload.js 永远加载不到（实测症状：后端已是最新，界面上却看不到新功能）。
+# 新服务器（scripts/serve_web.py）已对 HTML/JS/CSS 发 no-store；
+# 这里再加时间戳，连"还缓存着旧 HTML"的浏览器也会强制拿新的。
+$UrlOpen = "$Url`?t=$([DateTime]::Now.Ticks)"
 Write-Host "[2/3] 本地服务端口: $port" -ForegroundColor Green
 
 # ---- 3) 启动服务（新窗口，方便你看日志/随时关掉）---------------------------
@@ -110,7 +116,7 @@ Set-Location -LiteralPath '$Root'
 Write-Host '正在提供本地服务，演示期间请勿关闭本窗口。' -ForegroundColor Green
 Write-Host '结束后按 Ctrl+C 停止。' -ForegroundColor DarkGray
 Write-Host ''
-& '$Python' -m http.server $port --bind 127.0.0.1
+& '$Python' 'scripts\serve_web.py' $port
 "@
 if (-not $Python) {
     $inner = @"
@@ -118,7 +124,7 @@ if (-not $Python) {
 Set-Location -LiteralPath '$Root'
 Write-Host '正在提供本地服务，演示期间请勿关闭本窗口。' -ForegroundColor Green
 Write-Host ''
-& py -m http.server $port --bind 127.0.0.1
+& py 'scripts\serve_web.py' $port
 "@
 }
 
@@ -139,16 +145,16 @@ for ($i = 0; $i -lt 25; $i++) {
 if ($ready) {
     Write-Host "✔ 本地服务已就绪。" -ForegroundColor Green
     if (-not $NoBrowser) {
-        Start-Process $Url
-        Write-Host "  已在浏览器打开。若页面提示「未找到数据」，先在根目录跑：" -ForegroundColor Green
+        Start-Process $UrlOpen
+        Write-Host "  已在浏览器打开（带时间戳，保证不是缓存的旧页面）。若页面提示「未找到数据」，先在根目录跑：" -ForegroundColor Green
         Write-Host "    `$env:PYTHONPATH='src'; python -m aihoop.cli demo --seed 7 --duration 600 --out out/demo" -ForegroundColor Green
     } else {
         Write-Host "  （-NoBrowser：未自动打开浏览器）" -ForegroundColor DarkGray
     }
 } else {
     Write-Host "[提示] 服务启动较慢或失败。" -ForegroundColor Yellow
-    Write-Host "       请手动访问：$Url" -ForegroundColor Yellow
-    if (-not $NoBrowser) { Start-Process $Url }
+    Write-Host "       请手动访问：$UrlOpen" -ForegroundColor Yellow
+    if (-not $NoBrowser) { Start-Process $UrlOpen }
 }
 
 # 自测模式：确认服务可用就退出，不留下需要手动关闭的窗口
