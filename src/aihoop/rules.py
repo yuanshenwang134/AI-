@@ -553,9 +553,15 @@ def shot_chart(shots: list[Shot], team: Optional[str] = None,
     if team:
         shots = [s for s in shots if s.team == team]
 
+    input_count = len(shots)
+    unknown_result = sum(1 for s in shots
+                         if s.result == ShotResult.UNKNOWN.value)
+    unknown_location = sum(1 for s in shots
+                           if "location_unknown" in (s.tags or []))
     shots = [s for s in shots if s.result != ShotResult.UNKNOWN.value
-             and "location_unknown" not in s.tags]
-    points = [{"x": s.x, "y": s.y, "made": s.made, "value": s.value,
+             and "location_unknown" not in (s.tags or [])]
+    points = [{"x": s.x, "y": s.y, "team": s.team,
+               "made": s.made, "value": s.value,
                "t": s.t, "player_id": s.player_id, "zone": zone_of(s.x, s.y),
                "distance": round(s.distance, 2)} for s in shots]
 
@@ -588,7 +594,11 @@ def shot_chart(shots: list[Shot], team: Optional[str] = None,
     return {"points": points,
             "zones": sorted(zones.values(), key=lambda d: -d["att"]),
             "grid": grid,
-            "bin_size": bin_size}
+            "bin_size": bin_size,
+            "diagnostics": {"input_shots": input_count,
+                            "chartable_shots": len(shots),
+                            "unknown_result": unknown_result,
+                            "unknown_location": unknown_location}}
 
 
 # --------------------------------------------------------------------------

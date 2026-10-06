@@ -55,8 +55,21 @@ window.PAGES['shotchart'] = {
      *  篮筐判据放弃；球太小 → 追不到；也没有记分牌事件 → 出手数就是 0。 */
     emptyWhy: function () {
       var m = (this.game && this.game.meta) || {};
+      var all = (this.sc && this.sc.all) || {};
+      var d = all.diagnostics || {};
+      var chartable = (typeof d.chartable_shots === 'number')
+        ? d.chartable_shots : ((all.points || []).length);
       var lines = [];
-      lines.push('出手次数：0（这次分析没有产生任何出手记录）');
+      if ((this.team !== 'all' || this.playerFilter) && chartable > 0) {
+        lines.push('当前球队/球员筛选下没有可绘制的出手点；请切回「双方 / 全部球员」核对。');
+      } else if (d.input_shots > 0) {
+        lines.push('有 ' + d.input_shots + ' 条出手记录，但只有 ' +
+          (d.chartable_shots || 0) + ' 条有可用位置和结果。');
+        if (d.unknown_result) lines.push('结果未确认：' + d.unknown_result + ' 条；这些点不计入命中率热区。');
+        if (d.unknown_location) lines.push('出手位置未知：' + d.unknown_location + ' 条；不能投到球场图上。');
+      } else {
+        lines.push('出手次数：0（这次分析没有产生任何出手记录）');
+      }
       if (m.court_outputs_unverified) {
         lines.push('另外提醒：热区用的是**你手动标的**球场标定，'
           + '自动校验没通过 —— 位置可能有偏差。');
@@ -244,9 +257,9 @@ window.PAGES['shotchart'] = {
     '        \'要出热区请先用 calibrate 对这段视频做球场标定。）\'" />',
     '  </div>',
     '  <div class="card" v-else-if="!points.length">',
-    '    <h3 class="card-title">投篮热区 <span class="sub">标定可用，但本片段没有出手</span></h3>',
+    '    <h3 class="card-title">投篮热区 <span class="sub">暂无可绘制的出手点</span></h3>',
     '    <el-alert type="info" :closable="false" show-icon',
-    '      title="球场标定是好的，但这次分析**一次出手都没检测到**，所以热区是空的"',
+    '      title="当前没有可绘制的出手点"',
     '      :description="emptyWhy" />',
     '  </div>',
     '  <div class="card" v-else-if="!points.length && !(S.game)">',

@@ -221,12 +221,8 @@ def run_pipeline(rt: RawTrack, cfg: Optional[PipelineConfig] = None,
         cal_reason = (_cal.get("reason") or meta.get("calibration_rejected")
                       or "这份球场标定不适用于这段视频（机位/分辨率不匹配）")
 
-    # 但"用户手动标过、且自洽"的标定不该直接扔掉 —— 用户实测：标了好几轮、
-    # 界面存下了 0.693m 的标定，结果热区/战术图一个都不出，只会看到
-    # "机位/分辨率不匹配"，完全无从判断。
-    # 折中（并且**不掩盖事实**）：热区/战术图这类**展示性**产物允许用
-    # 用户手动标的标定来算，但在 meta 里显式标记"未通过自动校验"并给出原因；
-    # 计分/球员位置这类影响结论的仍然严格按 cal_usable 走。
+    # 用户手动标定即使没过柔性拟合分数，也可以用于展示性产物并标注原因；
+    # 已标记 position_unverified、退化或篮筐独立校验失败的结果仍会被拒绝。
     cal_source = str(getattr(_cal, "method", "") or
                      meta.get("calibration_method", "") or "")
     manual_cal = bool(meta.get("calibration_is_manual")) or \
@@ -248,8 +244,10 @@ def run_pipeline(rt: RawTrack, cfg: Optional[PipelineConfig] = None,
     # （同样的坑在 sources.py 里也踩过一次）。
     _rmse = meta.get("calibration_rmse_m")
     _rmse = 99.0 if _rmse is None else float(_rmse)
+    cal_position_unverified = bool(meta.get("calibration_position_unverified"))
     cal_charts = cal_usable or (manual_cal and not cal_degenerate
-                                and not hoop_check_bad and _rmse < 1.5)
+                                and not hoop_check_bad and not cal_position_unverified
+                                and _rmse < 1.5)
 
     if cal_charts:
         sc = shot_chart(shots)
@@ -504,6 +502,9 @@ def _evidence_meta(rt: RawTrack) -> dict:
         meta["hoop"] = {k: v for k, v in d["hoop"].items() if k != "samples"}
     if "calibration_valid" in d:
         meta["calibration_valid"] = d["calibration_valid"]
+    if "calibration_position_unverified" in d:
+        meta["calibration_position_unverified"] = bool(
+            d["calibration_position_unverified"])
     # 标定的来源与误差：判断"是不是用户手动标的"（手动标定即使自动校验没过，
     # 也允许出热区/战术图，并显式标注未校验 —— 见下面的 court_outputs_* 逻辑）
     meta["calibration_method"] = d.get("calibration_method", "")

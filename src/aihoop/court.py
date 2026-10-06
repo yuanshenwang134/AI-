@@ -372,6 +372,8 @@ class Calibration:
     # 现在明确绑定视频文件名，对不上就拒绝自动使用。
     for_video: str = ""
     frame_size: list = field(default_factory=list)   # [宽, 高]
+    # true 表示点数不足或独立校验未通过；不能据此输出位置类结论。
+    position_unverified: bool = False
 
     def fit(self) -> "Calibration":
         self.H = find_homography(self.src_px, self.dst_m)
@@ -471,16 +473,41 @@ class Calibration:
     def load(path: str) -> "Calibration":
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
+        method = str(d.get("method") or "manual")
+        src_px = d.get("src_px", [])
+        dst_m = d.get("dst_m", [])
+        position_unverified = bool(d.get("position_unverified"))
+        point_names = d.get("point_names") or []
+        # 老版手工标定没有保存校验标志。四点点击没有冗余约束；而早期
+        # FIBA 点表把罚球线误放在离中圈 5.8m（正确值是 8.2m）。
+        # 对这些存量文件要求重新标定，避免更新程序后继续画出偏移热区。
+        if not position_unverified and method == "web-keypoints" and len(src_px) <= 4:
+            position_unverified = True
+        if not position_unverified and method.startswith(("web-keypoints", "auto-identify")):
+            for name, point in zip(point_names, dst_m):
+                expected_y = (8.2 if name in ("ft_near", "ft_far") else
+                              5.675 if name in ("arc_near", "arc_far") else None)
+                if (expected_y is not None and len(point) >= 2
+                        and abs(abs(float(point[1])) - expected_y) > 0.05):
+                    position_unverified = True
+                    break
+            # 自动对应版本不存点名；旧表里的罚球线/三分弧顶坐标有误。
+            if not point_names and method.startswith("auto-identify"):
+                position_unverified = any(
+                    len(point) >= 2 and
+                    min(abs(abs(float(point[1])) - legacy_y)
+                        for legacy_y in (5.8, 6.2, 7.25)) < 0.05
+                    for point in dst_m)
         return Calibration(name=d.get("name", "default"),
-                           method=d.get("method", "manual"),
-                           src_px=d.get("src_px", []), dst_m=d.get("dst_m", []),
+                           method=method,
+                           src_px=src_px, dst_m=dst_m,
                            H=d.get("H"),
                            reproj_error_m=d.get("reproj_error_m", 0.0),
                            note=d.get("note", ""),
                            for_video=d.get("for_video", ""),
                            frame_size=d.get("frame_size", []),
-                           frame=d.get("frame") or
-                           Calibration._infer_frame(d.get("dst_m", [])))
+                           position_unverified=position_unverified,
+                           frame=d.get("frame") or Calibration._infer_frame(dst_m))
 
     def matches_video(self, video_path: str, width: int = 0,
                       height: int = 0) -> bool:

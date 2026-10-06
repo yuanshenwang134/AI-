@@ -1111,22 +1111,25 @@ class VideoSource:
             rt.detections_meta["device_note"] = device_note
         # 标定是否适用于这段视频 —— 标定文件是按机位存的，分辨率对不上就不能用
         rt.detections_meta["calibration_valid"] = self._calibration_matches(W, H)
-        # 记下方法/误差：pipeline 据此判断这是不是**用户手动标的**标定。
-        # 手动标定即使自动校验没过，也允许出热区/战术图（并显式标注"未校验"），
-        # 否则用户会遇到"标定明明存下来了、界面却什么都不给"的黑箱（实测踩到）。
+        # 记下来源与校验状态：手工点位只有在未被标记为 position_unverified 时
+        # 才能用于热区/战术图的宽松展示路径。
         if self.cal is not None:
             rt.detections_meta["calibration_method"] = getattr(
                 self.cal, "method", "") or ""
-            # ⚠️ 这个标志以前**只被 pipeline 读、从来没人写** —— 于是
-            # pipeline 里那条"手动标定放行出热区/战术图"的口子**永远不生效**：
-            # 用户辛苦标了几轮，吻合度差一点（ratio 1.02 < 1.25）就只剩一句
-            # "机位/分辨率不匹配"，热区/战术图一个都不出（实测原话：
-            # "战术图，投篮热区啥都没检测出来"）。这里把它补上。
+            # 柔性吻合度门槛失败时仍可在 UI 中预览人工标定；点数不足或独立校验
+            # 未通过的标定由 position_unverified 单独阻止位置类结论。
             _m = str(rt.detections_meta["calibration_method"]).lower()
             rt.detections_meta["calibration_is_manual"] = (
                 _m.startswith(("web-keypoints", "web_keypoints", "manual",
                                "auto-identify"))
                 or "keypoints" in _m or "manual" in _m)
+            unverified = bool(getattr(self.cal, "position_unverified", False))
+            rt.detections_meta["calibration_position_unverified"] = unverified
+            if unverified:
+                why = ("这份球场标定点数不足或未通过独立校验；请补标 6 个以上的命名地标，"
+                       "再核对投影球场线")
+                rt.detections_meta["calibration_valid"] = False
+                rt.detections_meta["calibration_rejected"] = why
             # 注意：**不能用 `or 99.0`** —— 标定误差正好是 0.0 时会被当成假值，
             # 于是"0 米误差的完美标定"被记成 99 米，热区/战术图又被关掉
             # （实测踩到：标定 0.00m、门禁却显示 calibration_rmse_m=99.0）。

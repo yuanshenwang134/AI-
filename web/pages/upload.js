@@ -55,17 +55,10 @@ window.PAGES['upload'] = {
       savedMarks: null,       // 该视频已保存的标点
       // ---- 标球场：点场地特征点解标定（用户建议：不一定要标篮筐）----
       markKind: 'hoop',       // hoop | court
-      courtItems: [],         // [{name,label,hint}] 当前这一侧半场可见的特征点
-      // 「这一侧半场」由用户选一次（左半场 / 右半场）。为什么不让工具自己认：
-      // 试过用自动标定 + 罚球区可见面积投票，投影会退化、面积算成 0，不可靠；
-      // 而选一次只影响**点名表显示哪 7 个点**，代价极小、结果确定。
-      // 用户实测反馈：「不需要说这个点靠近篮筐了」—— 因为这台机位只拍得到
-      // 篮筐这一侧，列"另一侧/中圈那一头"的点只会让人点画面里不存在的东西。
-      courtSide: 'left',      // left = 摄像机拍的是左边那半场 | right
-      // ⚠️ 哪一套点对应哪一侧，必须按**工具内部的坐标约定**来，不能凭直觉：
-      //   court.py 里左半场 = y ∈ [-14, 0]（底线在 y=-14），也就是 **_near 那一套**；
-      //   右半场 = y ∈ [0, 14]（底线在 y=+14），即 **_far 那一套**。
-      //   写反了不会报错，只会把球场整体平移 28m（两分变三分、热区整片错位）。
+      courtItems: [],         // [{name,label,hint,dst}] 全场地标；看不见的点跳过
+      // 默认整场 17 个地标；可见点由用户选择，画面外的坐标不能猜。
+      courtSide: 'full',      // 默认显示全场地标；也能临时筛选一个半场
+      // left/right 旧列表保留兼容；新流程用 full 的 A/B 端坐标。
       courtSideNames: {
         left: [
           { name: 'hoop_near', label: '篮筐中心' },
@@ -84,6 +77,25 @@ window.PAGES['upload'] = {
           { name: 'lane_far_right', label: '罚球区右角' },
           { name: 'ft_far', label: '罚球线中点' },
           { name: 'arc_far', label: '三分弧顶' }
+        ],
+        full: [
+          { name: 'corner_far_left', label: 'A端底线左角', dst: [-7.5, 14.0], hint: 'A端篮筐后，底线与左边线交点' },
+          { name: 'corner_far_right', label: 'A端底线右角', dst: [7.5, 14.0], hint: 'A端篮筐后，底线与右边线交点' },
+          { name: 'hoop_far', label: 'A端篮筐中心', dst: [0.0, 12.425], hint: 'A端篮圈正中心（A端就是你选定的一个篮筐）' },
+          { name: 'lane_far_left', label: 'A端罚球区左角', dst: [-2.45, 8.2], hint: 'A端罚球线左端与罚球区边线交点' },
+          { name: 'ft_far', label: 'A端罚球线中点', dst: [0.0, 8.2], hint: 'A端罚球线正中，罚球时站的那条线' },
+          { name: 'lane_far_right', label: 'A端罚球区右角', dst: [2.45, 8.2], hint: 'A端罚球线右端与罚球区边线交点' },
+          { name: 'arc_far', label: 'A端三分弧顶', dst: [0.0, 5.675], hint: 'A端三分弧正对篮筐的最高点' },
+          { name: 'half_left', label: '中线左边线交点', dst: [-7.5, 0.0], hint: '中线与画面左侧边线交点' },
+          { name: 'center', label: '中圈中心', dst: [0.0, 0.0], hint: '中圈或中场标志的圆心' },
+          { name: 'half_right', label: '中线右边线交点', dst: [7.5, 0.0], hint: '中线与画面右侧边线交点' },
+          { name: 'lane_near_left', label: 'B端罚球区左角', dst: [-2.45, -8.2], hint: 'B端罚球线左端与罚球区边线交点' },
+          { name: 'ft_near', label: 'B端罚球线中点', dst: [0.0, -8.2], hint: 'B端罚球线正中，罚球时站的那条线' },
+          { name: 'lane_near_right', label: 'B端罚球区右角', dst: [2.45, -8.2], hint: 'B端罚球线右端与罚球区边线交点' },
+          { name: 'arc_near', label: 'B端三分弧顶', dst: [0.0, -5.675], hint: 'B端三分弧正对篮筐的最高点' },
+          { name: 'corner_near_left', label: 'B端底线左角', dst: [-7.5, -14.0], hint: 'B端篮筐后，底线与左边线交点' },
+          { name: 'corner_near_right', label: 'B端底线右角', dst: [7.5, -14.0], hint: 'B端篮筐后，底线与右边线交点' },
+          { name: 'hoop_near', label: 'B端篮筐中心', dst: [0.0, -12.425], hint: '另一端篮圈正中心' }
         ]
       },
       mfFrames: [],           // 抽出来的画面 [{t,image,w,h}]
@@ -95,10 +107,7 @@ window.PAGES['upload'] = {
       hoverPt: null,          // 鼠标在画面上的位置（画准星用）
       mfCenter: 60,           // 在哪个时刻附近抽帧（同一镜头内）
       mfSpan: 3,              // 抽帧的时间跨度（秒）
-      // 用户实测反馈：「只能在一个画面里点，想点完所有点根本不显示」——
-      // 一个镜头里只看得见半场，剩下的半场在这个画面里压根不存在，
-      // 于是怎么点都点不全。做法改成**左右两个画面各自点各自的点**：
-      // 左画面标一侧半场、右画面标另一侧半场，两边的点一起送去解算。
+      // 两张预览图只用于补充同一镜头里被遮挡的地标，不代表两个不同机位或两个半场。
       // 单应矩阵的硬要求没变：**每个画面自己要有 4 个以上、铺得开的点**
       // （backend /api/calibrate_multi 的 per_frame_fit 就是按这个判的）。
       dualView: true,         // true = 左右两个画面；false = 老的「一张一张切」
@@ -116,8 +125,8 @@ window.PAGES['upload'] = {
       overlayH: 0,
       overlayLines: [],        // [[[x,y],...], ...] 画面像素坐标
       snapPts: [],             // 「点吸附精修」被采纳时的点（画成空心圈，供对照）
-      // 「只点 4 个点、不给名字」模式（推荐，默认开）
-      courtMini: true,
+      // 四个未命名点只用于预览；正式标定使用多个人工命名地标。
+      courtMini: false,
       mfMiniPts: [],           // [{t, seq(1..4), x, y}] 按点选顺序
       // ---- 新手上手（onboard）----
       // 目标：让第一次拿到软件的人在 5 分钟内看到一份结果，而不是对着表单发愣。
@@ -408,13 +417,13 @@ window.PAGES['upload'] = {
       var enough = this.mfFrames.length ? this.mfEnough : this.courtEnough;
       var tail = this.mfFrames.length
         ? (this.mfDualSplit
-            ? '。左画面 ' + this.mfLeftCov.n + ' 个、右画面 ' + this.mfRightCov.n +
-              ' 个 —— 每边各自够 4 个才算解得出（两边的点不能互相补）'
+            ? '。左侧预览帧 ' + this.mfLeftCov.n + ' 个、右侧预览帧 ' + this.mfRightCov.n +
+              ' 个 —— 每帧各自至少 4 个才算解得出（两帧的点不能互相补）'
             : '。画面里看不到的点按「跳过这一项」跳过它。')
         : '';
-      return '已点 ' + n + ' 个（两边合计）' +
-        (enough ? '——已经够了，可以直接按「保存并解算标定」；想更准就继续点'
-                : '——每边至少 4 个、建议 5~6 个') + tail;
+      return '已点 ' + n + ' 个' +
+        (enough ? '——达到解算底线；建议同一帧补到 6 个以上，再核对投影线'
+                : '——至少需要 4 个；推荐同一帧 6 个以上') + tail;
     },
     /** 已点出的点里，篮筐中心 + 左右缘 → 算出归一化 rx；中心 + 上下沿 → ry */
     markHoop: function () {
@@ -480,7 +489,7 @@ window.PAGES['upload'] = {
       if (!frames.length) return [];
       var out = [];
       items.forEach(function (it) {
-        var m = it.dst;                 // 后端 /api/court_landmarks 给的球场坐标（米）
+        var m = it.dst;                 // 球场全场坐标（米）
         if (!m || m.length < 2) return;
         var w = H[2][0] * m[0] + H[2][1] * m[1] + H[2][2];
         if (Math.abs(w) < 1e-9) { out.push(it.label); return; }
@@ -681,8 +690,8 @@ window.PAGES['upload'] = {
       this.mfTarget = '';
       this.mfResult = null;
       this.$message.info(this.courtMini
-        ? '已切到「只点 4 个点」：不用选名字，按顺序在画面里点 4 个特征点'
-        : '已切回「逐个点名」：需要你选名字后逐点，注意 near/far 容易判反');
+        ? '已切到「4 点试算」：仅预览投影线，不能保存为热区/战术图标定'
+        : '已切回「全场命名地标」：标 6 个以上可见点，并核对球场线投影');
     },
     mfClick: function (ev) {
       if (!this.mfCurrent) return;
@@ -723,9 +732,8 @@ window.PAGES['upload'] = {
         if (this.courtItems[i].name === this.mfTarget) { item = this.courtItems[i]; }
       }
       // 同名点只保留最后一次，但**只在同一个画面里替换**：
-      // 「底线左角」在左半场和右半场各出现一次，那是两个不同的点；
-      // 以前按名字全局去重，点第二半场时会把第一半场的点删掉
-      // （用户看到的现象就是"点完所有点一个都不显示"）。
+      // 同一个地标可以在同镜头的两幅预览帧各标一次；只替换当前帧的同名点，
+      // 保留另一帧的点供镜头位移补偿。
       var self = this;
       var sameT = this.mfPts.filter(function (p) {
         return p.t === t && p.name === self.mfTarget; });
@@ -804,8 +812,8 @@ window.PAGES['upload'] = {
           this.mfIdx2 = (this.mfIdx + 1) % this.mfFrames.length;
         }
         if (this.mfFrames.length < 2) {
-          this.$message.info('现在左右两边是同一幅画面：拖动下面的原片到「看另一侧半场」' +
-            '的那一刻，再按「把这帧放到右画面」，左右就各自一张了');
+          this.$message.info('现在左右两边是同一幅画面：拖动原片到同一镜头里球场线更清楚的时刻，' +
+            '再按「把这帧放到右画面」');
         }
       }
     },
@@ -819,7 +827,7 @@ window.PAGES['upload'] = {
     /** 下拉框直接用的两个入口（面板号写死，模板里不必写内联函数） */
     setLeftFrame: function (idx) { this.assignToPanel(0, idx); },
     setRightFrame: function (idx) { this.assignToPanel(1, idx); },
-    /** 右画面直接对着原片取一帧（"我看的是另一侧半场"那一刻） */
+    /** 右画面直接对着原片取同一镜头的另一帧 */
     addRightFrame: function () {
       var self = this;
       var el = this.$refs.markVideo;
@@ -827,7 +835,7 @@ window.PAGES['upload'] = {
       this.addFrameAtTime(t, function (tt) {
         self.mfIdx2 = self.mfFrames.length - 1;
         self.mfActive = 1;
-        self.$message.success('右画面已换成 t=' + tt + 's 这一帧 —— 现在在它上面点另一侧半场的点');
+        self.$message.success('右画面已换成 t=' + tt + 's 这一帧 —— 只合并同一镜头里的标点');
       });
     },
     /** 把已标的点整理成 /api/calibrate_multi 的入参：每幅画面各自一组。
@@ -919,7 +927,7 @@ window.PAGES['upload'] = {
         self.refreshOverlay();
         var m = r && r.mini;
         if (r && r.ok && m && m.ok) {
-          self.$message.success('自动定向成功：' + m.which + '，吻合度 ' + m.ratio);
+          self.$message.warning('4 点试算仅供预览：' + m.which + '；吻合度不能证明点位对应正确，请切回命名地标标定后再保存');
         } else if (r && r.ok) {
           self.$message.warning('解出来了，但自动定向没跑；看下面的候选排名');
         } else {
@@ -1121,9 +1129,9 @@ window.PAGES['upload'] = {
       this.showCourtOverlay = !this.showCourtOverlay;
       this.refreshOverlay();
     },
-    /** 切换"摄像机拍的是哪一侧半场" —— 只影响点名表显示哪 7 个点 */
+    /** 切换全场 / 单半场地标列表。 */
     setCourtSide: function (side) {
-      this.courtSide = (side === 'right') ? 'right' : 'left';
+      this.courtSide = (side === 'left' || side === 'right') ? side : 'full';
       this.courtItems = (this.courtSideNames[this.courtSide] || []).slice();
       // 换了这一侧，已标的点对应的物理位置就全变了 —— 必须清掉，别让用户
       // 拿着上一侧的点去解算（那会得到一份"看着成功、其实差 14m"的标定）。
@@ -1131,7 +1139,7 @@ window.PAGES['upload'] = {
         this.mfPts = [];
         this.mfTarget = '';
         this.mfResult = null;
-        this.$message.info('已切换到另一侧半场，原标点已清空（两半场的点是不同物理位置）');
+        this.$message.info('已切换球场地标范围，原标点已清空');
       }
     },
     /** 用**指定时刻**的两帧装进左右画面（同一镜头才行）。
@@ -1168,7 +1176,7 @@ window.PAGES['upload'] = {
             self.mfIdx2 = 1;
             self.$message.success('已装好两帧（t=' + self.mfFrames[0].t +
               's / t=' + self.mfFrames[1].t + 's，同一镜头）：' +
-              '左画面标一侧半场、右画面标另一侧，每边点够 4~6 个点');
+              '两边是同一镜头的不同预览帧；每帧至少 4 点，推荐一帧标 6 个以上');
           }
         }).catch(function (e) {
           self.$message.error('取帧失败：' + (e && e.message ? e.message : e));
@@ -1950,7 +1958,7 @@ window.PAGES['upload'] = {
     '    <div v-if="videoUrl" style="margin-bottom:8px">',
     '      <div class="row" style="align-items:center;margin-bottom:6px">',
     '        <b>原片</b>',
-    '        <span class="hint">拖进度条：先找到「一侧半场看得清」的那一刻 → 点右边按钮放到左画面；再拖到「另一侧半场」→ 放到右画面</span>',
+    '        <span class="hint">拖到球场线最清楚的画面。优先选能看到全场的一帧；多帧必须属于同一镜头。</span>',
     '        <span class="grow"></span>',
     '        <el-button size="small" type="primary" @click="useVideoMoment()">',
     '          {{ markKind===\'court\' ? (dualView ? (mfActive===1 ? \'把这一帧放到右画面\' : \'把这一帧放到左画面\') : \'把这帧加进来标点\') : \'用当前画面取帧\' }}</el-button>',
@@ -1961,8 +1969,8 @@ window.PAGES['upload'] = {
     '    </div>',
     // 第一步：先说清「这件事要干到什么程度」——用户实测反馈"标完篮筐中心就不知道怎么办了"
     '    <el-alert type="info" :closable="false" show-icon style="margin-bottom:8px"',
-    '      :title="markKind===\'court\' ? \'怎么标：左右两个画面，一个标一侧半场，每边点够 4~6 个点\' : \'怎么标：只标「篮筐中心」就能保存，另外 4 项是可选的\'"',
-    '      :description="markKind===\'court\' ? (\'每侧半场推荐点这 5~6 个：底线左角、底线右角、罚球区左角、罚球区右角、罚球线中点、篮筐中心。\' + (mfFrames.length ? \'流程：把「看近端半场（篮筐那侧）」的那一帧放到左画面、另一侧半场的放到右画面；先点下面的点名 → 再到画面里点它；一个名字可以在左右两边各点一次。\' : \'画面还在抽，抽完就会出现「左右两个画面」的选择器。\') + \' ★每幅画面自己要有 4 个以上、铺得开的点（单应矩阵只认同一幅画面里的点）；画面里看不到的点按「跳过这一项」。\') : \'另外 4 项（篮圈左/右缘、上/下沿）只用来量筐宽和篮筐高度，跳过也行；标了中心就能保存。\'" />',
+    '      :title="markKind===\'court\' ? \'怎么标：全场命名地标，同一帧点 6 个以上\' : \'怎么标：只标「篮筐中心」就能保存，另外 4 项是可选的\'"',
+    '      :description="markKind===\'court\' ? (\'全场 17 个命名地标可选：两端篮筐/底线、罚球线、三分弧顶、中线和中圈。\' + (mfFrames.length ? \'先选地标，再在清晰画面上点交点或圆心；两张预览必须来自同一镜头。\' : \'画面还在抽，抽完会显示球场地标清单。\') + \' ★推荐同一帧点 6 个以上、分布较开的可见点；看不见的点不要猜，直接跳过。\') : \'另外 4 项（篮圈左/右缘、上/下沿）只用来量筐宽和篮筐高度，跳过也行；标了中心就能保存。\'" />',
     // 当前目标 + 实时反馈（点了几个、离"能保存"还差几个）
     // 条件必须用 guideNext（它是模式感知的）；用 markCurrent 的话，多帧模式下
     // courtCurrent 恒为真而 guideNext 为 null，模板会取 null.idx 直接报错。
@@ -2018,14 +2026,11 @@ window.PAGES['upload'] = {
     '      <span class="hint">红色虚线 = 用你标的点算出来的球场线（边线/底线/中线/罚球区/三分弧）。',
     '        <b>压在画面里真实的白线/绿区上 = 标定是对的</b>；整体偏移或歪斜 = 有点名对不上位置。</span>',
     '    </div>',
-    // 把"通过校验"的客观读数摆出来。为什么必须显式给数字：
-    // 分析端有一道硬门槛（投影线与画面白线的吻合度 ratio ≥1.25），
-    // 达不到就**不生成战术图/热图**。以前界面只说"标定可用"，用户存下去才发现
-    // 战术图是空的，完全对不上账（实测踩到：AI 自己标的点 ratio 只有 0.32）。
+    // 把吻合度当参考读数，必须同时让用户看回投线；真实转播画面上该分数可能误判。
     '    <el-alert v-if="markKind===\'court\' && mfResult && mfResult.calibration_fit" :closable="false" show-icon style="margin-bottom:6px"',
     '      :type="fitRatio >= 1.25 ? \'success\' : \'warning\'"',
-    '      :title="\'吻合度读数：\' + (mfResult.calibration_fit.ratio != null ? mfResult.calibration_fit.ratio : \'—\') + \'（门槛 1.25）\' + (fitRatio >= 1.25 ? \' —— 这份标定会被分析端接受，战术图/热图能出\' : \' —— 太低，分析端会拒收：战术图、热图、2/3 分区分都不会生成（只判进球）\')"',
-    '      description="这个数字是「把球场线投回画面、量它压在白线上的比例」。低于 1.25 时请开上面的叠加层，看看红线整体偏到哪去了，重新点几个更准的点（优先四角）。" />',
+    '      :title="\'吻合度参考：\' + (mfResult.calibration_fit.ratio != null ? mfResult.calibration_fit.ratio : \'—\') + (fitRatio >= 1.25 ? \'（达到建议门槛）\' : \'（低于建议门槛）\')"',
+    '      description="这个数字估计投影线与画面白线的重合程度，不能单独证明标定正确。请打开上面的叠加层，确认红色球场线实际压在画面里的白线上；对不上就不要保存。" />',
     // 「点吸附精修」的结果：采纳了没有、吻合度前后对比。
     // 为什么必须显式区分"采纳/没采纳"：护栏拒绝时点集**根本没动**，
     // 若只显示一个"已精修"的绿条，用户会以为点被改过（实测这机位就会被拒）。
@@ -2037,15 +2042,14 @@ window.PAGES['upload'] = {
     // 这样"图片显示尺寸"和"定位容器尺寸"严格相等，绿圈才会落在鼠标点上。
     // ---- 球场模式：画面切换 + 特征点选择（多画面累加）----
     '    <div v-if="markKind===\'court\' && mfFrames.length" style="margin-bottom:8px">',
-    // 一句总纲：这件事现在是「左右两个画面各自标一个半场」
+    // 全场多点标定：命名地标用真实 FIBA 球场坐标，避免四点猜线。
     '      <div class="hint" style="margin-bottom:6px">',
-    '        ① 先把「看这一侧半场」的两个时刻分别放到<b>左画面 / 右画面</b>（各点一下「用左边画面提取 / 用右边画面提取」的那张图即选中它）；',
-    '        ② 再从下面的点名里选一个特征点 → 到<b>那个画面</b>里点它的位置。',
-    '        ★ 硬要求：<b>每一幅画面自己要有 4 个以上、铺得开的点</b> —— 单应矩阵只认同一幅画面里的点；',
-    '        一边只有两三个点时，两边加起来是解不出来的。画面里看不到的点按「跳过这一项」。</div>',
+    '        先选点名，再在画面里点该交点/圆心。A端是你选定的一个篮筐端，B端是另一端；从 A 端底线面向 B 端定义左、右。',
+    '        建议同一帧标 6 个以上、分布在球场不同位置的可见点（优先底线角、罚球线、边线和中线）。',
+    '        看不到的点不要猜；两帧要来自同一镜头，镜头切换后的画面不能合并。</div>',
     '      <div class="row" style="align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">',
     '        <el-switch :model-value="dualView" active-text="左右两个画面" inactive-text="一张一张切" @change="setDualView" />',
-    '        <span class="hint">左 = 一侧半场的画面、右 = 另一侧半场的画面；两边各自标各自的点</span>',
+    '        <span class="hint">左/右是两张同镜头预览帧，用来补充被遮挡地标，不是两个半场或两个机位</span>',
     '      </div>',
     // ---- 单画面：老的「一张一张切」----
     '      <template v-if="!dualView">',
@@ -2067,7 +2071,7 @@ window.PAGES['upload'] = {
     '              <el-tag size="small" :type="mfLeftCov.enough ? \'success\' : \'warning\'" effect="plain">',
     '                {{ mfLeftCov.n }} 个点{{ mfLeftCov.enough ? \'\' : \'（不够 4 个）\' }}</el-tag>',
     '            </div>',
-    '            <div class="hint" style="margin-top:4px">这一幅是左半场{{ mfDualSplit ? \'\' : \'（目前跟右画面是同一幅）\' }}</div>',
+    '            <div class="hint" style="margin-top:4px">左侧预览帧{{ mfDualSplit ? \'\' : \'（目前跟右画面是同一幅）\' }}</div>',
     '            <div class="row" style="align-items:center;gap:4px;margin-top:4px">',
     '              <span class="hint">换这一幅：</span>',
     '              <el-select :model-value="mfIdx" size="small" style="width:150px" @change="setLeftFrame">',
@@ -2082,7 +2086,7 @@ window.PAGES['upload'] = {
     '              <el-tag size="small" :type="mfRightCov.enough ? \'success\' : \'warning\'" effect="plain">',
     '                {{ mfRightCov.n }} 个点{{ mfRightCov.enough ? \'\' : \'（不够 4 个）\' }}</el-tag>',
     '            </div>',
-    '            <div class="hint" style="margin-top:4px">这一幅是右半场（看不到另一侧是正常的）</div>',
+    '            <div class="hint" style="margin-top:4px">右侧预览帧（应与左侧属于同一镜头）</div>',
     '            <div class="row" style="align-items:center;gap:4px;margin-top:4px">',
     '              <span class="hint">换这一幅：</span>',
     '              <el-select :model-value="mfIdx2" size="small" style="width:150px" @change="setRightFrame">',
@@ -2098,7 +2102,7 @@ window.PAGES['upload'] = {
     '          /',
     '          <span :style="{color: mfActive===1 ? \'#409eff\' : \'#909399\'}">点在<b>右画面</b>上</span>',
     '          —— 直接在画面里点一下就会切过去；两边合计已标 {{ mfPts.length }} 个点',
-    '          <span v-if="!mfDualSplit">｜ 现在两边还是同一幅画面：把右侧原片拖到「看另一侧半场」的那一刻，再按「把原片当前这帧放到右画面」</span>',
+    '          <span v-if="!mfDualSplit">｜ 现在两边还是同一幅画面：把原片拖到同一镜头里更清楚的时刻，再按「把原片当前这帧放到右画面」</span>',
     '        </div>',
     '      </template>',
     '      <div class="row" style="align-items:center;margin-bottom:6px;flex-wrap:wrap">',
@@ -2110,20 +2114,15 @@ window.PAGES['upload'] = {
     '        <el-button size="small" @click="mfResample">按这个时刻重抽</el-button>',
     '        <span class="hint">（覆盖上面左右两个画面的候选）</span>',
     '      </div>',
-    // 「只点 4 个点」模式（推荐，默认开）：**不给点命名**。
-    // 为什么这么设计：给点命名（near/far、底线角/罚球区角）是最大的坑 ——
-    // corner_near_* 的坐标其实是 y=-14（**远端**底线），命名与直觉相反，
-    // 判错一次整张图平移 28m（用户实测就栽在这）。
-    // 现在改成：用户按顺序点 4 个特征点，后端把 10 种球场地物组合全试一遍，
-    // 用"投影线是否压在画面白线上"（吻合度）挑最好的 —— 判据是算出来的。
+    // 四点无名模式保留作投影预览；四点恰好确定一个单应矩阵，没有冗余验证对应关系。
     '      <div class="row" style="align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">',
-    '        <el-switch :model-value="courtMini" active-text="只点 4 个点（推荐）" @change="setCourtMini" />',
-    '        <span class="hint">开：不用给点起名字，按顺序点 4 个就行，工具自己判断是球场的哪几个地物。<br>关：回到"逐个点名"的老方式（需要你自己判断 near/far，容易判反）。</span>',
+    '        <el-switch :model-value="courtMini" active-text="4 点试算（仅预览）" @change="setCourtMini" />',
+    '        <span class="hint">四点模式没有多余点可检查对应关系，结果只用于预览。要生成热区/战术图，请保持关闭并标 6 个以上命名地标。</span>',
     '      </div>',
     // 4 点模式的说明 + 槽位
     '      <el-alert v-if="courtMini" type="info" :closable="false" show-icon style="margin-bottom:6px"',
-    '        title="按顺序点这 4 个点（同一幅画面上）"',
-    '        description="顺序不影响正确性（工具会把各种对应都试一遍），但**请在同一幅画面上点满 4 个**。建议选一眼就能认出的地物，比如：① 罚球区左上角 ② 罚球区右上角 ③ 罚球区右下角 ④ 罚球区左下角（绕一圈）；或者 ① 底线左端 ② 底线右端 ③ 中线右端 ④ 中线左端。" />',
+    '        title="四点试算不能保存为正式标定"',
+    '        description="白线吻合度在转播画面上可能误判；请只把叠加线当预览参考。切回命名地标模式，点至少 6 个分布较开的场地点，再保存。" />',
     '      <div v-if="courtMini" class="row" style="align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">',
     '        <span class="hint">当前画面已点：</span>',
     '        <el-tag v-for="n in 4" :key="\'mq\'+n" size="small"',
@@ -2133,30 +2132,26 @@ window.PAGES['upload'] = {
     '        <el-button size="small" @click="miniClearHere" :disabled="!miniPtsActive.length">重点这一幅</el-button>',
     '        <el-button size="small" @click="miniClearAll" :disabled="!mfMiniPts.length">全清</el-button>',
     '      </div>',
-    // 自动定向结果：选中哪套地物、吻合度、候选排名 —— 如实展示，方便判断可不可信
+    // 四点试算结果只展示为预览，不将白线评分包装成已验证结论。
     '      <el-alert v-if="courtMini && mfResult && mfResult.mini" :closable="false" show-icon style="margin-bottom:6px"',
-    '        :type="fitRatio >= 1.25 ? \'success\' : \'warning\'"',
-    '        :title="mfResult.mini.ok ? (\'自动定向：\' + mfResult.mini.which + \'　吻合度 \' + mfResult.mini.ratio + \'（门槛 1.25）\') : \'自动定向没成功：\' + (mfResult.mini.note || \'\')"',
-    '        :description="mfResult.mini.ok ? (\'试了 \' + (mfResult.mini.ranked ? mfResult.mini.ranked.length : 0) + \' 种地物组合。开上面的「叠加球场线自检」看绿线/红线有没有压在真实球场白线上 —— 那才是最终判据。\') : \'\'" />',
+    '        type="warning"',
+    '        :title="mfResult.mini.ok ? (\'仅供预览：\' + mfResult.mini.which + \'；吻合度 \' + mfResult.mini.ratio + \' 不能确认地标对应\') : (\'预览失败：\' + (mfResult.mini.note || \'\'))"',
+    '        description="请打开球场线自检，确认投影与画面白线吻合；正式结果请关闭四点模式并使用全场命名地标。" />',
     '      <div class="row" style="align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">',
-    '        <span class="hint">摄像机拍的是哪一侧篮筐：</span>',
-    '        <el-radio-group :model-value="courtSide" size="small" @change="setCourtSide">',
-    '          <el-radio-button label="left">左侧（篮筐在左边那条底线）</el-radio-button>',
-    '          <el-radio-button label="right">右侧</el-radio-button>',
-    '        </el-radio-group>',
+    '        <el-tag size="small" type="success" effect="plain">全场地标模式 · {{ courtItems.length }} 个命名点</el-tag>',
     '        <el-button size="small" @click="pickStableFrames">自动挑同一镜头的两帧</el-button>',
-    '        <span class="hint">只影响下面显示哪 7 个点；两幅画面必须是**同一镜头**，否则合并解必然矛盾。</span>',
+    '        <span class="hint">只点看得见的地标；A端/B端按篮筐区分，左右从 A 端底线面向 B 端定义。</span>',
     '      </div>',
     // 球场的点名列表（篮筐模式没有这一排：中心是唯一必点项）
     '      <div class="row" style="flex-wrap:wrap">',
     '        <el-button v-for="it in courtItems" :key="it.name" size="small"',
     '          :type="mfTarget===it.name ? \'primary\' : (mfDone[it.name] ? \'success\' : \'default\')"',
-    '          :plain="mfTarget!==it.name" @click="mfPick(it)">',
+    '          :plain="mfTarget!==it.name" :title="it.hint" @click="mfPick(it)">',
     '          {{ mfDone[it.name] ? \'✓ \' : \'\' }}{{ it.label }}</el-button>',
     '      </div>',
     '      <div class="hint" style="margin-top:2px">',
-    '        选一个名字 → 在左画面点一下 → 再在右画面点一下（同一个名字可以两边各标一次，各记各的）；',
-    '        点名上打勾表示<b>至少有一幅画面</b>标过它。</div>',
+    '        选一个地标 → 在当前画面点一下；同一地标可在同一镜头的另一帧再点一次。',
+    '        点名上打勾表示<b>至少有一幅画面</b>标过它。鼠标悬停可看该点定义。</div>',
     // 篮筐模式的可选步骤：想自己量半径的人点这里，不点就交给检测器（默认路径）
     '      <div v-if="markKind===\'hoop\'" class="row" style="flex-wrap:wrap;margin-top:2px">',
     '        <span class="hint">可选：想让判进球的横向尺度由你定，就再点一下圈的一侧边缘',
@@ -2170,14 +2165,14 @@ window.PAGES['upload'] = {
     '      </div>',
     '      <div class="hint" v-if="mfTarget" style="margin-top:6px;color:#409eff">',
     '        现在去画面里点：<b>{{ mfTarget }}</b> —— 顺序随便，选中的那一个高亮；',
-    '        两个半场都可以用同一个名字各点一次（各自独立记录）</div>',
+    '        同一地标可在第二张预览帧再点一次（各帧独立记录）</div>',
       // 点完之后**必须留下"下一步"**：原来 mfTarget 一被清空，上一句就消失了，
       // 屏幕上只剩一排点名按钮 —— 用户就卡在"标完篮筐中心不知道怎么办"（实测反馈）。
       '      <div class="hint" v-else style="margin-top:6px;color:#409eff">',
       '        下一步：选一个点名 → 到画面里点它。现在：',
       '        左画面 {{ mfLeftCov.n }} 个{{ mfLeftCov.enough ? \'（够了）\' : \'（还差 \' + (4 - mfLeftCov.n) + \' 个）\' }}、',
       '        右画面 {{ mfRightCov.n }} 个{{ mfRightCov.enough ? \'（够了）\' : \'（还差 \' + (4 - mfRightCov.n) + \' 个）\' }}。',
-      '        两边都够了再按「保存并解算标定」——每边 4 个以上是能解出来的底线，建议每边 5~6 个。</div>',
+      '        单帧至少 4 个点才能解算；推荐同一帧有 6 个以上并且分布较开，再预览球场线后保存。</div>',
     // 每幅画面各自的覆盖度：哪一边还差、点是不是挤在一条线上，一眼看到
     '      <div class="row" style="flex-wrap:wrap;align-items:center;margin-top:6px">',
     '        <span class="hint">每幅画面的覆盖度：</span>',
@@ -2219,8 +2214,7 @@ window.PAGES['upload'] = {
     '        description="已保存为这段视频的标定，分析时会自动使用。" />',
     '    </div>',
     // 画面（球场模式用抽帧图，篮筐模式用取帧图）
-    // 两个画面模式下：左画面 + 右画面并排。**每张图各自记自己那一半场地的点** ——
-    // 这就是用户要的"分两个画面点，一个画面点左半场、一个画面点右半场"。
+    // 左右预览帧并排显示；两帧都使用同一套全场坐标地标。
     '    <div :class="markKind===\'court\' && mfDualSplit ? \'mf-panels\' : \'\'">',
     '      <div v-if="markKind===\'court\'" class="mf-panel-wrap"',
     '           :class="{ on: !mfDualSplit || mfActive===0 }" data-side="0"',
@@ -2274,7 +2268,7 @@ window.PAGES['upload'] = {
     '        <div v-if="markKind===\'hoop\' && markHoop" style="position:absolute;pointer-events:none;border:2px dashed #ef4444;border-radius:50%"',
     '             :style="{left:((markHoop.cx-markHoop.rx)*100)+\'%\',top:((markHoop.cy-markHoop.ry)*100)+\'%\',width:(markHoop.rx*200)+\'%\',height:(markHoop.ry*200)+\'%\'}"></div>',
     '      </div>',
-    // 右画面：自己的坐标系、自己的点（另一侧半场）
+    // 右画面：同一镜头的另一张预览帧，有自己的标点记录。
     '      <div v-if="markKind===\'court\' && mfDualSplit" class="mf-panel-wrap"',
     '           :class="{ on: mfActive===1 }" data-side="1"',
     '           style="position:relative;width:100%;max-width:1100px;cursor:crosshair"',
@@ -2353,7 +2347,7 @@ window.PAGES['upload'] = {
     // 保存：篮筐模式标了中心就能存；球场模式要求**至少有一幅画面自己够 4 个点**
     // （以前只看总点数，于是"6 个点撒在 3 幅画面上"这种解不出来的点法也能点保存，
     //  点下去只会拿到一句"误差偏大"，用户根本不知道该改什么）
-    '      <el-button size="small" type="primary" :loading="markSaving"',
+    '      <el-button v-if="markKind!==\'court\' || !courtMini" size="small" type="primary" :loading="markSaving"',
     '        :disabled="markKind===\'court\' ? !(mfFrames.length ? (mfEnough && solvableFrames.length) : courtEnough) : !markHoop"',
     '        @click="markKind===\'court\' ? (mfFrames.length ? saveCourtMulti() : saveCourt()) : saveMarks()">',
     '        {{ markKind===\'court\' ? \'保存并解算标定\' : \'保存标点\' }}</el-button>',

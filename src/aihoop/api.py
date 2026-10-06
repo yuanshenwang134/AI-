@@ -166,8 +166,14 @@ class JobCreate(BaseModel):
     # 报告却写 0:0"是用户最不能接受的错法（实测踩到）。
     # court/visual：一律按场上检测到的进球计分（比分牌只作参考）；
     # scoreboard：强制用比分牌带入分 + 事件。
-    # 比赛复盘默认按场上出手；auto / scoreboard 仍可显式选择比分牌优先。
-    score_policy: str = "court"
+    #
+    # ⚠️ 这里曾经被改成 "court"，但**注释没跟着改**（上面几行还在说 auto 是默认），
+    # 结果与用户预期完全相反：用户看到比分牌写着 27:35、结果页却 0:0，
+    # 以为"看比分板判进球的功能没了"（实测原话）。
+    # 而且前端提交任务时**根本不发 score_policy** → 界面上的任务全部走 court
+    # → 没标篮筐时场上进球为 0 → 永远 0:0。所以默认必须回到 auto：
+    # 比分牌读得出来就用它，读不出来才退回场上进球。
+    score_policy: str = "auto"
     # 没有球场标定时，视觉命中默认按几分计（2 或 3）
     visual_shot_value: int = 2
     # 显式声明"不要球场坐标"：允许在没有标定的情况下跑完整视觉路径，
@@ -1384,8 +1390,9 @@ COURT_LANDMARKS = {
     "half_left":         (-7.5, 0.0),
     "half_right":        (7.5, 0.0),
     "center":            (0.0, 0.0),
-    "ft_near":           (0.0, -5.8),
-    "ft_far":            (0.0, 5.8),
+    # 全场坐标以中圈为 y=0。罚球线距底线 5.8m，因此离中圈是 14-5.8=8.2m。
+    "ft_near":           (0.0, -8.2),
+    "ft_far":            (0.0, 8.2),
     "hoop_near":         (0.0, -12.425),
     "hoop_far":          (0.0, 12.425),
     # ↓ 这几项**必须**和 COURT_LABELS 一一对应。
@@ -1397,9 +1404,9 @@ COURT_LANDMARKS = {
     "lane_far_right":    (2.45, 8.2),
     "lane_near_left":    (-2.45, -8.2),
     "lane_near_right":   (2.45, -8.2),
-    # 三分线弧顶：半径 6.75m，正对篮筐
-    "arc_far":           (0.0, 14.0 - 6.75),
-    "arc_near":          (0.0, -14.0 + 6.75),
+    # 三分弧半径从篮筐量；篮筐离底线 1.575m，因此弧顶距中圈 5.675m。
+    "arc_far":           (0.0, 14.0 - 1.575 - 6.75),
+    "arc_near":          (0.0, -14.0 + 1.575 + 6.75),
 }
 
 
@@ -1432,7 +1439,7 @@ def _minimal_quad_models():
         models.append((desc, dst))
 
     for sgn in (-1, 1):                  # 这 4 个点落在哪半场
-        for margin in (8.2, 6.2):        # 罚球线距中线的距离（FIBA 是 8.2）
+        for margin in (8.2,):            # FIBA 罚球线离中圈 8.2m（距底线 5.8m）
             base = sgn * HALF
             ft_y = sgn * margin
             tag = "%s半场" % ("负" if sgn < 0 else "正")
@@ -1626,11 +1633,9 @@ def _pick_calibration_homography(Hm, rmse, src, dst, tags, per_frame_fit,
     """在多画面标定里挑**用哪一份单应矩阵**。
 
     规则：**只要有一幅画面自己就能标定，就用那一幅**（点的最多的一幅）。
-    为什么不是"把所有画面的点合并成一份"：界面上是左右两个画面，一个标一侧半场，
-    这两幅常常是**两台机位/两个角度**拍的。把两个角度的点揉进一份单应矩阵，会解出
-    一个"谁都不对、但整体误差看着还行"的折中解（每个点都被互相拉偏），而画面自己
-    那 4~6 个点解出来的是几何上自洽的那一份。跨画面合并只留给"单个半场凑不够 4 个点"
-    的情况（球场关于中线对称，半场画面是能凑齐 4 个点的）。
+    左右画面是同一镜头的两张预览帧，用来补充地标；镜头摇移会先做位移补偿。
+    若画面实际来自两台机位/镜头切换，就不能把两套透视揉成一份单应矩阵，
+    因此逐帧拟合与镜头一致性检查会决定采用哪一帧、并提示冲突点。
 
     返回 ``{H, src, dst, tags, rmse, via, t, note, outliers, n_inliers}``。
     "矛盾点"也按**真正用的那一份 H** 重算 —— 合并拟合挑出来的离群点可能落在另一幅
@@ -2088,8 +2093,15 @@ async def post_calibrate(req: CourtMarkRequest) -> Any:
         blocked = (f"这份标定把画面里的真篮筐投偏了 {hoop_err:.1f}m（>"
                    f"{HOOP_UNVERIFIED_M:.0f}m）—— 基本可以确定特征点与名称对不上，"
                    "请核对后重新点选")
-    tolerate = (not blocked) and hoop_err is not None and hoop_err > 3.0
+    # 四点正好求出单应矩阵，没有多余约束能发现点名错误；即使独立篮筐校验
+    # 没有检测到篮筐，也不能把它当成可信的位置标定。
+    tolerate = (not blocked) and (
+        len(kp_px) <= 4 or (hoop_err is not None and hoop_err > 3.0))
     notes = []
+    if len(kp_px) <= 4:
+        notes.append("只有 4 个标定点，重投影误差不能验证点名是否正确；"
+                     "已保存供预览，但热区/战术图位置结论会被关闭。"
+                     "建议同一画面补到 6 个以上、分布较开的命名地标")
     if hoop_err is not None:
         notes.append(f"篮筐投影误差 {hoop_err:.2f}m")
     if tolerate:
@@ -2132,6 +2144,7 @@ async def post_calibrate(req: CourtMarkRequest) -> Any:
         out.parent.mkdir(parents=True, exist_ok=True)
         try:
             from dataclasses import asdict
+            cal.position_unverified = bool(tolerate)
             data = asdict(cal)
             data.update({
                 "revision": cur_rev + 1,
@@ -2419,6 +2432,14 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     cap.release()
 
+    # 四个未命名点总能精确解出单应矩阵，但无法校验它们对应的是哪四条球场线。
+    # 白线吻合度在真实转播画面上会误判，因此此模式只供预览，不保存为位置标定。
+    if getattr(req, "mini", False) and getattr(req, "confirm", False):
+        raise HTTPException(
+            400,
+            "4 点自动猜测模式只能预览，不能保存为热区/战术图标定。"
+            "请关闭 4 点模式，标 6 个以上有名字的球场特征点，并核对投影线。")
+
     label_of = {d["name"]: d["label"] for d in COURT_LABELS}
     src, dst, tags = [], [], []
     for fr in (req.frames or []):
@@ -2686,11 +2707,12 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
         frames_differ_shot = True
     diff_shot_note = ""
     if frames_differ_shot:
-        diff_shot_note = ("这两幅画面看起来**不是同一个镜头**（镜头切过/摇过）。"
+        diff_shot_note = ("这两幅画面看起来**不是同一个镜头**（镜头切换后视角不同）。"
                           "跨镜头的点没有统一坐标系，合并解必然互相矛盾 —— "
                           "这是拍摄方式决定的，不是你点错了位置。"
-                          "建议：只留**同一侧半场、同一镜头**的一幅画面，"
-                          "在它上面把能看见的点一次点够 5~6 个（另一幅画面的点会被忽略）。")
+                          "建议：只留**同一镜头**的一幅画面，"
+                          "在它上面把看得见的全场地标一次点够 6 个以上"
+                          "（另一幅画面的点会被忽略）。")
 
     # 场景数（不同画面时刻的数量）—— 用来判断"是否跨镜头"
     n_frames = len({f.get("t") for f in (req.frames or [])})
@@ -2702,10 +2724,9 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
     if _best_n < 4 and len(src) >= 4:
         detail = "、".join(f"t={f['t']}s 有 {f['n']} 个点" for f in per_frame_fit)
         note = ("**每一幅画面都不够 4 个点**（%s）。单应矩阵要求**同一幅画面里至少 "
-                "4 个点**（跨画面只有在相机完全没动时才能拼）。界面上是左右两个画面："
-                "请把一侧半场看得清的那幅放左边、另一侧半场看得清的那幅放右边，"
-                "然后**每一幅各自点够 4~6 个点**（底线两角、罚球区两角、篮筐中心、"
-                "中圈中心），再解算。" % detail)
+                "4 个点**（跨画面只有在相机完全没动时才能拼）。界面上的左右两个画面"
+                "是同一镜头的预览帧：请每幅各自标 4 个以上、分布较开的点，并优先在"
+                "其中一帧标够 6 个以上，再解算。" % detail)
         ok = False
         if comp_note:
             note += "；" + comp_note
@@ -2846,9 +2867,9 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             # 跨镜头时"互相矛盾"是必然的：不是用户点错，别再往用户身上推。
             note = ("**这两幅画面不是同一个镜头**（%s）。跨镜头的点没有统一坐标系，"
                     "把它们混在一起解，必然有一部分点'互相矛盾' —— 这是拍摄方式"
-                    "决定的，不是你点错了。做法：只留其中一幅（同一侧半场、同一镜头），"
-                    "在它上面把看得见的点一次点够 5~6 个。"
-                    % (comp_note or "镜头切过/摇过"))
+                    "决定的，不是你点错了。做法：只留同一镜头的一幅，在画面里把"
+                    "看得见的全场地标一次点够 6 个以上。"
+                    % (comp_note or "镜头切换"))
         else:
             note = ("排除掉 %d 个矛盾的点后只剩 %d 个点，**解不出标定**"
                     "（单应矩阵至少要 3 个不共线的对应，且实际用 4 个以上才稳）。"
@@ -3049,7 +3070,7 @@ async def court_landmarks() -> Any:
         if pt is not None:
             it["dst"] = [float(pt[0]), float(pt[1])]
         items.append(it)
-    return {"landmarks": items, "min_points": 4,
+    return {"landmarks": items, "min_points": 4, "recommended_points": 6,
             "court": {"length_m": 28.0, "width_m": 15.0}}
 
 
@@ -3098,6 +3119,12 @@ async def get_calibration(video_path: str) -> Any:
     except Exception:
         return {"exists": True, "path": str(cp), "error": "标定文件解析失败",
                 "revision": 0}
+    position_unverified = bool(d.get("position_unverified"))
+    try:
+        from .court import Calibration
+        position_unverified = Calibration.load(str(cp)).position_unverified
+    except Exception:  # noqa: BLE001
+        pass
     # revision 要回给前端：保存时带回去做乐观锁（避免两个页面互相覆盖，移植自旧版）；
     # hoop_error / position_unverified 也回：界面要能一眼看出"这份标定没通过独立校验"。
     return {"exists": True, "path": str(cp),
@@ -3109,7 +3136,7 @@ async def get_calibration(video_path: str) -> Any:
             "capture_time_s": d.get("capture_time_s"),
             "hoop_error_m": d.get("hoop_error_m"),
             "hoop_check": d.get("hoop_check"),
-            "position_unverified": bool(d.get("position_unverified")),
+            "position_unverified": position_unverified,
             "revision": int(d.get("revision") or 0)}
 
 
