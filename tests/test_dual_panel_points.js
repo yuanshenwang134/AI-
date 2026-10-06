@@ -50,6 +50,9 @@ function readyVm() {
   vm.form.video_path = 'x.mp4';
   vm.dualView = true;
   vm.setCourtSide('left');
+  // 本文件测的是**逐个点名**的老流程；「只点 4 点」模式默认是开的
+  // （courtMini: true），不关掉的话点击会走 mini 通道，这里就测不到命名流程。
+  vm.courtMini = false;
   vm.mfFrames = [{ t: LEFT_T, w: 854, h: 480, image: 'x' },
                  { t: RIGHT_T, w: 854, h: 480, image: 'x' }];
   vm.mfIdx = 0;

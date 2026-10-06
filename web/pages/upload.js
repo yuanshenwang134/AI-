@@ -116,6 +116,9 @@ window.PAGES['upload'] = {
       overlayH: 0,
       overlayLines: [],        // [[[x,y],...], ...] 画面像素坐标
       snapPts: [],             // 「点吸附精修」被采纳时的点（画成空心圈，供对照）
+      // 「只点 4 个点、不给名字」模式（推荐，默认开）
+      courtMini: true,
+      mfMiniPts: [],           // [{t, seq(1..4), x, y}] 按点选顺序
       // ---- 新手上手（onboard）----
       // 目标：让第一次拿到软件的人在 5 分钟内看到一份结果，而不是对着表单发愣。
       // 关闭状态记在 localStorage：看过就不再烦他，但可以随时重新打开。
@@ -633,6 +636,17 @@ window.PAGES['upload'] = {
      *  左右两个画面各有各的坐标系：点落在**哪一张画面**上，就记那一张的 t。
      *  以前这里只认 mfCurrent，于是"在右边画面点的点"会被记到左边画面上，
      *  坐标整体跑到另一边去。 */
+    /** 切换「只点 4 个点」模式：两边点集不通用，切换时清干净并说明。 */
+    setCourtMini: function (v) {
+      this.courtMini = !!v;
+      this.mfMiniPts = [];
+      this.mfPts = [];
+      this.mfTarget = '';
+      this.mfResult = null;
+      this.$message.info(this.courtMini
+        ? '已切到「只点 4 个点」：不用选名字，按顺序在画面里点 4 个特征点'
+        : '已切回「逐个点名」：需要你选名字后逐点，注意 near/far 容易判反');
+    },
     mfClick: function (ev) {
       if (!this.mfCurrent) return;
       var t = this.mfClickT(ev);
@@ -642,6 +656,26 @@ window.PAGES['upload'] = {
       var box = el.getBoundingClientRect();
       var x = Math.max(0, Math.min(1, (ev.clientX - box.left) / box.width));
       var y = Math.max(0, Math.min(1, (ev.clientY - box.top) / box.height));
+
+      // ---- 「只点 4 个点」模式：**不给点命名**，按点选顺序记录 ----
+      // 为什么这么设计：给点命名（near/far、底线角/罚球区角）是最大的坑 ——
+      // corner_near_* 的坐标其实是 y=-14（远端底线），命名与直觉相反，
+      // 判错一次整张图平移 28m（用户实测就栽在这）。改成不命名 + 后端自动
+      // 试 10 种球场地物组合、用"投影线是否压在白线上"挑最好的那套。
+      if (this.courtMini) {
+        var sameHere = this.mfMiniPts.filter(function (p) { return p.t === t; });
+        if (sameHere.length >= 4) {
+          this.$message.warning('这一幅画面已经点了 4 个点。要重来请按「重点这一幅」。');
+          return;
+        }
+        this.mfMiniPts.push({ t: t, seq: sameHere.length + 1, x: x, y: y });
+        this.mfResult = null;
+        this.$message.success('第 ' + (sameHere.length + 1) + ' 个点 → (' +
+          x.toFixed(3) + ', ' + y.toFixed(3) + ')' +
+          (sameHere.length + 1 < 4 ? '，继续点第 ' + (sameHere.length + 2) + ' 个' : '，4 个点齐了，点「先预览」'));
+        return;
+      }
+
       if (!this.mfTarget) {
         this.$message.warning('先在下面选一个特征点（比如「篮筐中心」），再在画面里点它位置'
           + (this.mfDualSplit ? '—— 选一次就能在两边各点一下' : ''));
@@ -802,8 +836,93 @@ window.PAGES['upload'] = {
      * 做乐观锁（移植自旧版标定页）。宽容规则在服务端：只拒绝了"数学上无意义"的
      * 退化点位和"篮筐投偏 >6m"；只点 4 个点、有点矛盾、篮筐偏 3~6m 都**允许保存**，
      * 但会标 position_unverified，位置结论（热区/战术图）由分析端关掉。 */
+    /** 「只点 4 个点」模式：组装有序的 4 点并交给后端自动定向。
+     *
+     *  为什么单独走一条通道：点选**顺序**本身就是数据的一部分（它决定这 4 个点
+     *  对应球场上的哪套地物），所以不能用 landmarks 字典那种按名字的写法 ——
+     *  实测靠 JS 对象键的插入顺序传顺序太脆。
+     */
+    miniPayload: function () {
+      var byT = {};
+      var self = this;
+      this.mfMiniPts.forEach(function (p) {
+        byT[p.t] = byT[p.t] || [];
+        byT[p.t][p.seq - 1] = [p.x, p.y];
+      });
+      var frames = [];
+      Object.keys(byT).forEach(function (k) {
+        var pts = byT[k];
+        // 必须正好 4 个、且不缺位
+        var ok = pts.length === 4;
+        for (var i = 0; i < 4; i++) { if (!pts[i]) { ok = false; } }
+        if (ok) { frames.push({ t: Number(k), points: pts }); }
+      });
+      return frames;
+    },
+    /** 4 点模式的解算/保存 */
+    miniSolve: function (confirm) {
+      var self = this;
+      var frames = this.miniPayload();
+      if (!frames.length) {
+        this.$message.warning('需要**同一幅画面**上正好 4 个点（现在：' +
+          this.mfMiniPts.length + ' 个）—— 少一个都解不出来');
+        return;
+      }
+      this.markSaving = true;
+      window.API.calibrateMulti({
+        video_path: String(this.form.video_path).trim(),
+        mini: true, mini_frames: frames,
+        confirm: !!confirm,
+        revision: (this.calInfo && this.calInfo.revision != null)
+          ? this.calInfo.revision : null
+      }).then(function (r) {
+        self.markSaving = false;
+        self.mfResult = r;
+        self.mfPreviewed = !!(r && r.ok);
+        self.refreshOverlay();
+        var m = r && r.mini;
+        if (r && r.ok && m && m.ok) {
+          self.$message.success('自动定向成功：' + m.which + '，吻合度 ' + m.ratio);
+        } else if (r && r.ok) {
+          self.$message.warning('解出来了，但自动定向没跑；看下面的候选排名');
+        } else {
+          self.$message.warning('这份点法还不能用：' +
+            String((r && r.note) || '').slice(0, 70));
+        }
+      }).catch(function (e) {
+        self.markSaving = false;
+        self.$message.error('解算失败：' + (e && e.message ? e.message : e));
+      });
+    },
+    /** 重点当前这一幅（清掉它的 4 个点） */
+    miniClearHere: function () {
+      var t = this.mfClickTForActive();
+      this.mfMiniPts = this.mfMiniPts.filter(function (p) { return p.t !== t; });
+      this.mfResult = null;
+    },
+    /** 当前正在点的那一幅画面的时刻（mini 模式用） */
+    mfClickTForActive: function () {
+      var f = (this.mfActive === 1) ? this.mfCurrentRight : this.mfCurrent;
+      return f ? f.t : null;
+    },
+    miniClearAll: function () {
+      this.mfMiniPts = [];
+      this.mfResult = null;
+      this.$message.success('已清空 4 点');
+    },
+    /** 当前画面上的 4 点（渲染用） */
+    miniPtsHere: function () {
+      var t = this.mfCurrent ? this.mfCurrent.t : null;
+      return this.mfMiniPts.filter(function (p) { return p.t === t; });
+    },
+    miniPtsRight: function () {
+      var t = this.mfCurrentRight ? this.mfCurrentRight.t : null;
+      return this.mfMiniPts.filter(function (p) { return p.t === t; });
+    },
     previewCourtMulti: function () {
       var self = this;
+      // 「只点 4 点」模式：走 mini 通道（不给名字，后端自动定向）
+      if (this.courtMini) { this.miniSolve(false); return; }
       if (!this.mfEnough) {
         this.$message.warning('至少要点 4 个特征点（现在 ' + this.mfPts.length +
           ' 个）；左右两个画面**各自**都要有 4 个以上才是稳的');
@@ -834,6 +953,8 @@ window.PAGES['upload'] = {
     },
     saveCourtMulti: function () {
       var self = this;
+      // 「只点 4 点」模式：走 mini 通道保存
+      if (this.courtMini) { this.miniSolve(true); return; }
       if (!this.mfEnough) {
         this.$message.warning('至少要点 4 个特征点（现在 ' + this.mfPts.length +
           ' 个）；左右两个画面**各自**都要有 4 个以上才是稳的');
@@ -1970,9 +2091,34 @@ window.PAGES['upload'] = {
     '        <el-button size="small" @click="mfResample">按这个时刻重抽</el-button>',
     '        <span class="hint">（覆盖上面左右两个画面的候选）</span>',
     '      </div>',
-    // 「这一侧半场」选一次：只影响点名表显示哪 7 个点。
-    // 这台机位只拍得到篮筐这一侧，所以只需要这一侧的 7 个特征点；
-    // 选它 = 告诉工具"那 7 个名字对应的是哪一端的物理位置"。
+    // 「只点 4 个点」模式（推荐，默认开）：**不给点命名**。
+    // 为什么这么设计：给点命名（near/far、底线角/罚球区角）是最大的坑 ——
+    // corner_near_* 的坐标其实是 y=-14（**远端**底线），命名与直觉相反，
+    // 判错一次整张图平移 28m（用户实测就栽在这）。
+    // 现在改成：用户按顺序点 4 个特征点，后端把 10 种球场地物组合全试一遍，
+    // 用"投影线是否压在画面白线上"（吻合度）挑最好的 —— 判据是算出来的。
+    '      <div class="row" style="align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">',
+    '        <el-switch :model-value="courtMini" active-text="只点 4 个点（推荐）" @change="setCourtMini" />',
+    '        <span class="hint">开：不用给点起名字，按顺序点 4 个就行，工具自己判断是球场的哪几个地物。<br>关：回到"逐个点名"的老方式（需要你自己判断 near/far，容易判反）。</span>',
+    '      </div>',
+    // 4 点模式的说明 + 槽位
+    '      <el-alert v-if="courtMini" type="info" :closable="false" show-icon style="margin-bottom:6px"',
+    '        title="按顺序点这 4 个点（同一幅画面上）"',
+    '        description="顺序不影响正确性（工具会把各种对应都试一遍），但**请在同一幅画面上点满 4 个**。建议选一眼就能认出的地物，比如：① 罚球区左上角 ② 罚球区右上角 ③ 罚球区右下角 ④ 罚球区左下角（绕一圈）；或者 ① 底线左端 ② 底线右端 ③ 中线右端 ④ 中线左端。" />',
+    '      <div v-if="courtMini" class="row" style="align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">',
+    '        <span class="hint">当前画面已点：</span>',
+    '        <el-tag v-for="n in 4" :key="\'mq\'+n" size="small"',
+    '          :type="miniPtsHere.length >= n ? \'success\' : \'info\'" effect="plain">',
+    '          {{ n }}. {{ miniPtsHere[n-1] ? (\'(\' + miniPtsHere[n-1].x.toFixed(3) + \', \' + miniPtsHere[n-1].y.toFixed(3) + \')\') : \'未点\' }}',
+    '        </el-tag>',
+    '        <el-button size="small" @click="miniClearHere" :disabled="!miniPtsHere.length">重点这一幅</el-button>',
+    '        <el-button size="small" @click="miniClearAll" :disabled="!mfMiniPts.length">全清</el-button>',
+    '      </div>',
+    // 自动定向结果：选中哪套地物、吻合度、候选排名 —— 如实展示，方便判断可不可信
+    '      <el-alert v-if="courtMini && mfResult && mfResult.mini" :closable="false" show-icon style="margin-bottom:6px"',
+    '        :type="fitRatio >= 1.25 ? \'success\' : \'warning\'"',
+    '        :title="mfResult.mini.ok ? (\'自动定向：\' + mfResult.mini.which + \'　吻合度 \' + mfResult.mini.ratio + \'（门槛 1.25）\') : \'自动定向没成功：\' + (mfResult.mini.note || \'\')"',
+    '        :description="mfResult.mini.ok ? (\'试了 \' + (mfResult.mini.ranked ? mfResult.mini.ranked.length : 0) + \' 种地物组合。开上面的「叠加球场线自检」看绿线/红线有没有压在真实球场白线上 —— 那才是最终判据。\') : \'\'" />',
     '      <div class="row" style="align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">',
     '        <span class="hint">摄像机拍的是哪一侧篮筐：</span>',
     '        <el-radio-group :model-value="courtSide" size="small" @change="setCourtSide">',
@@ -2081,6 +2227,14 @@ window.PAGES['upload'] = {
     '                  fill="#22c55e" :font-size="Math.max(16, frameW*0.022)"',
     '                  style="paint-order:stroke;stroke:#000;stroke-width:3px">{{ i + 1 }}. {{ p.label }}</text>',
     '          </template>',
+    // 「只点 4 个点」模式：把点选顺序画出来（编号 1..4），用户才能确认顺序对不对
+    '          <template v-for="(p,i) in miniPtsHere" :key="\'M\'+i">',
+    '            <circle :cx="p.x * frameW" :cy="p.y * frameH" :r="Math.max(11, frameW*0.013)"',
+    '                    fill="rgba(59,130,246,.35)" stroke="#3b82f6" :stroke-width="Math.max(2, frameW*0.0035)" />',
+    '            <text :x="p.x * frameW + Math.max(13, frameW*0.015)" :y="p.y * frameH"',
+    '                  fill="#3b82f6" :font-size="Math.max(18, frameW*0.024)"',
+    '                  style="paint-order:stroke;stroke:#000;stroke-width:3px">{{ p.seq }}</text>',
+    '          </template>',
     // 精修被采纳时，把"吸附后"的点也画出来（空心黄圈）——存下来的标定用的是它。
     '          <template v-for="(p,i) in snapPtsHere" :key="\'S\'+i">',
     '            <circle :cx="p.x * frameW" :cy="p.y * frameH" :r="Math.max(11, frameW*0.013)"',
@@ -2120,6 +2274,13 @@ window.PAGES['upload'] = {
     '            <circle :cx="p.x * frameW" :cy="p.y * frameH" :r="Math.max(11, frameW*0.013)"',
     '                    fill="none" stroke="#f59e0b" :stroke-width="Math.max(2, frameW*0.0035)"',
     '                    stroke-dasharray="4 3" />',
+    '          </template>',
+    '          <template v-for="(p,i) in miniPtsRight" :key="\'MR\'+i">',
+    '            <circle :cx="p.x * frameW" :cy="p.y * frameH" :r="Math.max(11, frameW*0.013)"',
+    '                    fill="rgba(59,130,246,.35)" stroke="#3b82f6" :stroke-width="Math.max(2, frameW*0.0035)" />',
+    '            <text :x="p.x * frameW + Math.max(13, frameW*0.015)" :y="p.y * frameH"',
+    '                  fill="#3b82f6" :font-size="Math.max(18, frameW*0.024)"',
+    '                  style="paint-order:stroke;stroke:#000;stroke-width:3px">{{ p.seq }}</text>',
     '          </template>',
     '          <template v-if="showCourtOverlay">',
     '            <polyline v-for="(ln,li) in overlayLines" :key="\'ovr\'+li"',

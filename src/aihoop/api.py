@@ -1403,6 +1403,91 @@ COURT_LANDMARKS = {
 }
 
 
+def _minimal_quad_models():
+    """"只点 4 个点"时，候选的球场地物组合（穷举，交给评分挑）。
+
+    为什么要有这条流程（用户实测 + AI 自测的结论）：
+      让用户给每个点**命名**（near/far、底线角/罚球区角…）是最大的坑：
+        * HALF_COURT_CORNERS = [底线左, 底线右, 中线右, 中线左]，
+          而 `corner_near_*` 的坐标是 y=**-14**（**远端**底线）——
+          命名与直觉相反，判错一次整张图平移 28m；
+        * 球场关于中线对称，某些组合**几何上等价**，靠误差分不出来。
+      所以改成：**用户不命名**，只点他肉眼能确定的 4 个特征点（顺序固定），
+      后端把常见的球场地物组合**全部试一遍**，用"投影线压在真实白线上的
+      吻合度 ratio"挑最好的 —— 判据是算出来的，不依赖任何人目测。
+    """
+    W = 7.5
+    HALF = 14.0
+    LANE_X = 2.45
+    models = []
+    seen = set()
+
+    def _add(desc, dst):
+        # 去重：有些组合与"罚球线距中多少"无关（比如纯底线+中线），
+        # 不去重的话候选排名里会出现完全相同的两条（实测看到过）。
+        key = tuple(sorted(tuple(p) for p in dst))
+        if key in seen:
+            return
+        seen.add(key)
+        models.append((desc, dst))
+
+    for sgn in (-1, 1):                  # 这 4 个点落在哪半场
+        for margin in (8.2, 6.2):        # 罚球线距中线的距离（FIBA 是 8.2）
+            base = sgn * HALF
+            ft_y = sgn * margin
+            tag = "%s半场" % ("负" if sgn < 0 else "正")
+            # ① 两条底线两端 + 中线两端
+            _add("底线两端 + 中线两端（%s）" % tag,
+                 [(-W, base), (W, base), (W, 0.0), (-W, 0.0)])
+            # ② 罚球区四角（用户最容易点准的一组）
+            _add("罚球区四角（%s，罚球线距中 %.1fm）" % (tag, margin),
+                 [(-LANE_X, ft_y), (LANE_X, ft_y),
+                  (LANE_X, base), (-LANE_X, base)])
+            # ③ 罚球区靠中线两角 + 中线两端
+            _add("罚球区两角 + 中线两端（%s，罚球线距中 %.1fm）" % (tag, margin),
+                 [(-LANE_X, ft_y), (LANE_X, ft_y), (W, 0.0), (-W, 0.0)])
+    return models
+
+
+def solve_minimal_quad(src4, bgr, W, H):
+    """4 个**未命名**的点 -> 自动挑出最合理的球场地物对应。
+
+    把候选模型全部试一遍，每个解一份 H，用 frame_fit_detail 量
+    "投影线是否压在画面里的白线上"，取 ratio 最高者。
+    """
+    from .calibcheck import frame_fit_detail
+    from .court import Calibration, find_homography
+
+    if len(src4) != 4:
+        return {"ok": False, "note": "需要正好 4 个点"}
+    ranked = []
+    for desc, dst in _minimal_quad_models():
+        try:
+            Hm = find_homography([list(p) for p in src4],
+                                 [list(p) for p in dst])
+            cal = Calibration(name="mini", method="mini",
+                              src_px=[list(p) for p in src4],
+                              dst_m=[list(p) for p in dst], H=list(Hm),
+                              frame="full", frame_size=[W, H])
+            d = frame_fit_detail(bgr, cal)
+            r = float(d.get("ratio") or 0.0)
+        except Exception:                                    # noqa: BLE001
+            continue
+        ranked.append({"desc": desc, "dst": [list(p) for p in dst], "ratio": r,
+                       "lines": d.get("lines"), "H": Hm})
+    if not ranked:
+        return {"ok": False, "note": "4 个点解不出任何合理的球场对应（可能共线）"}
+    ranked.sort(key=lambda x: -x["ratio"])
+    best = ranked[0]
+    return {"ok": True, "dst": best["dst"], "ratio": best["ratio"],
+            "which": best["desc"], "H": best["H"], "lines": best["lines"],
+            "ranked": [{"desc": x["desc"], "ratio": x["ratio"]}
+                       for x in ranked[:5]],
+            "note": ("4 点自动定向：选中「%s」，吻合度 %.2f（正常 1.3~2.3，越高越好）；"
+                     "共试了 %d 种地物组合。"
+                     % (best["desc"], best["ratio"], len(ranked)))}
+
+
 def _frame_bgr(vp: Path, at: float):
     """取某一时刻的画面（BGR ndarray），失败返回 None。
 
@@ -2235,6 +2320,16 @@ class MultiCalibRequest(BaseModel):
     # ⚠️ 但它**带护栏**：精修结果必须几何上仍像球场才采纳，否则原样保留用户的点
     # （实测这机位太正对、单应病态，精修会把吻合度刷到 74 的退化解 —— 那种一律拒绝）。
     snap: bool = True
+    # 「只点 4 个点、不给名字」模式：后端穷举常见球场地物组合，用吻合度挑。
+    # 为什么要它：让用户给点**命名**（near/far）是最大的坑 ——
+    # corner_near_* 的坐标其实是 y=-14（远端底线），命名与直觉相反，
+    # 判错一次整张图平移 28m。改成不命名 + 自动定向，判据是算出来的。
+    mini: bool = False
+    # 「只点 4 点」时点的**有序**列表（每帧一组）：
+    #   [{t: 12.3, points: [[x,y],[x,y],[x,y],[x,y]]}, ...]  x/y 为归一化
+    # 为什么不用 landmarks 的字典：那要靠 JS 对象键的插入顺序来保证顺序，
+    # 太脆；点选顺序本身就是数据的一部分（它决定哪个点对应哪套地物）。
+    mini_frames: list = []
 
 
 class AutoCalibRequest(BaseModel):
@@ -2390,6 +2485,38 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                 comp_note = "各画面都没有凑够 4 个点，无法做镜头位移补偿"
         except Exception as e:  # noqa: BLE001
             comp_note = f"镜头位移补偿失败（{type(e).__name__}: {e}），按原样解算"
+
+    # ---- 「只点 4 个点、不给名字」：穷举地物组合，用吻合度自动定向 ----
+    # ⚠️ 这一段**必须放在** len(src) < 4 检查之前：mini 模式下用户根本不发
+    # landmarks（只发有序的 4 个点），所以那时 src 是空的，先检查就会误报
+    # "至少要点 4 个场地特征点"（实测踩到）。
+    mini_info = None
+    if getattr(req, "mini", False):
+        _use = []
+        for fr in (req.mini_frames or []):
+            pts = fr.get("points") or []
+            if len(pts) == 4:
+                _use.append({"t": float(fr.get("t") or 0.0), "points": pts})
+        if not _use and len(src) == 4 and req.frames:
+            _use = [{"t": float((req.frames[0] or {}).get("t") or 0.0),
+                     "points": [[p[0] / float(W), p[1] / float(H)] for p in src]}]
+        if not _use:
+            mini_info = {"ok": False,
+                         "note": "「4 点自动定向」需要正好 4 个点（每帧一组）"}
+        else:
+            _bgr = _frame_bgr(vp, _use[0]["t"])
+            if _bgr is None:
+                mini_info = {"ok": False, "note": "取不到画面，无法自动定向"}
+            else:
+                _src4 = [[float(p[0]) * W, float(p[1]) * H]
+                         for p in _use[0]["points"]]
+                mini_info = solve_minimal_quad(_src4, _bgr, W, H)
+                if mini_info.get("ok"):
+                    src = [list(p) for p in _src4]
+                    dst = [list(p) for p in mini_info["dst"]]
+                    tags = [{"name": "mini_%d" % (i + 1),
+                             "label": "第%d点" % (i + 1),
+                             "t": round(_use[0]["t"], 2)} for i in range(4)]
 
     if len(src) < 4:
         raise HTTPException(
@@ -2844,6 +2971,9 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             # 拒绝时（accepted=False）点集根本没动，界面要如实说"保留了你的点"，
             # 而不是假装精修过了。
             "snap": snap_info,
+            # 「只点 4 点、不给名字」的自动定向结果：选中哪套地物、吻合度、
+            # 以及其它候选的分数 —— 界面要如实展示，方便用户判断标定可不可信。
+            "mini": mini_info,
             "hoop_error_m": (round(hoop_err2, 2) if hoop_err2 is not None else None),
             "position_unverified": bool(tolerant),
             "n_points": n_used,
