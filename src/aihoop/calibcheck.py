@@ -637,7 +637,16 @@ def auto_calibrate(bgr, hints=None, half_court: bool = True,
             arr = np.array(q, dtype=np.float64)
             area = 0.5 * abs(float(np.dot(arr[:, 0], np.roll(arr[:, 1], -1))
                                    - np.dot(arr[:, 1], np.roll(arr[:, 0], -1))))
-            if area < 0.10 * bgr.shape[0] * bgr.shape[1]:
+            # 面积门槛：实测坏解是"一条细长对角带"，只占画面 20.7%，却被打了
+            # ratio=20.5（比合理候选的 6.75 还高）—— 因为白地板广告也是"亮脊"。
+            # 原来的 10% 门槛放它过去了。抬到 25%：
+            #   * 实测合理候选占画面 42%（通关）；
+            #   * 细长对角带占 20.7%（被拦）。
+            # ⚠️ 这只是"拦住明显退化解"，**不能**让自动标定变准 ——
+            # 这一机位几乎正对球场，单应矩阵天然病态，评分指标本身分不出
+            # "细的球场白线"和"大块白地板广告"（实测两组亮脊强度重叠）。
+            # 想真正拿到可用标定，仍然需要人工标点（或换素材）。
+            if area < 0.25 * bgr.shape[0] * bgr.shape[1]:
                 continue
             H = find_homography(q, dst)
             probe = Calibration(src_px=[list(p) for p in q],
