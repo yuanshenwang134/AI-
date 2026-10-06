@@ -33,6 +33,78 @@ win.ElementPlusLocaleZhCn = {};
 win.echarts = { init: function () { return { setOption: function () {}, resize: function () {}, dispose: function () {} }; } };
 win.ResizeObserver = function () { this.observe = function () {}; this.disconnect = function () {}; };
 
+// ---------------- 真编译器：拿仓库自带的 Vue 真编译一遍模板 ----------------
+// 为什么必须真编译（实测事故）：我把一个属性写成 `:viewBox="'0 0 1 1"`（字符串没
+// 闭合），结果**整个页面内容区全空白**（侧边栏还在，主区什么都不渲染）。
+// 而本脚本当时是全绿的 —— 上面那套正则"模板结构校验"遇到未闭合的 ' 会一路吞到
+// 后面，看起来还是配对的。正则查不出这类错误，**编译器能**。
+const VUE_FILE = path.join(WEB, 'vendor', 'vue.global.prod.js');
+let VUE_COMPILER = null;
+if (fs.existsSync(VUE_FILE)) {
+  try {
+    const sandbox = { console, setTimeout, clearTimeout, setInterval, clearInterval,
+      Promise, Date, Math, JSON, navigator: { userAgent: 'node' } };
+    sandbox.window = sandbox;
+    sandbox.self = sandbox;
+    sandbox.globalThis = sandbox;
+    // Vue 编译属性值时要用 DOM 解码 HTML 实体（模板属性里出现 `&` 就会走到那条路），
+    // 所以 createElement 不能是空对象 —— 要支持 `el.innerHTML = '&amp;'` 再读
+    // `el.textContent`。第一版就是空对象，于是**合法模板**也报
+    // "Cannot read properties of undefined (reading '0')"（抛在 decodeEntities 里）。
+    const ENT = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"',
+                  apos: "'", copy: '©', reg: '®', hellip: '…', mdash: '—',
+                  ndash: '–', times: '×', middot: '·', deg: '°' };
+    const decodeEnt = (s) => String(s).replace(
+      /&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, body) => {
+        if (body[0] === '#') {
+          const code = (body[1] === 'x' || body[1] === 'X')
+            ? parseInt(body.slice(2), 16) : parseInt(body.slice(1), 10);
+          return isNaN(code) ? m : String.fromCodePoint(code);
+        }
+        return Object.prototype.hasOwnProperty.call(ENT, body) ? ENT[body] : m;
+      });
+    const mkEl = () => {
+      const el = { style: {}, setAttribute() {}, appendChild() {},
+                   addEventListener() {}, removeEventListener() {}, _html: '' };
+      const decoded = (s) => decodeEnt(String(s).replace(/&quot;/g, '"'));
+      Object.defineProperty(el, 'innerHTML', {
+        get() { return this._html; }, set(v) { this._html = String(v); },
+        configurable: true
+      });
+      Object.defineProperty(el, 'textContent', {
+        get() { return decodeEnt(this._html); }, set(v) { this._html = String(v); },
+        configurable: true
+      });
+      // Vue 浏览器版的 decodeEntities 对**属性值**是这么解的：
+      //     decoder.innerHTML = `<div foo="${raw}">`
+      //     return decoder.children[0].getAttribute('foo')
+      // 所以桩里必须有 children —— 否则会抛
+      // "Cannot read properties of undefined (reading '0')"（实测就是这么崩的）。
+      Object.defineProperty(el, 'children', {
+        get() {
+          const m = /foo="([^"]*)"/.exec(this._html);
+          const val = m ? decoded(m[1]) : '';
+          return [{ getAttribute: () => val }];
+        },
+        configurable: true
+      });
+      return el;
+    };
+    sandbox.document = {
+      createElement: mkEl, createTextNode: () => ({}),
+      querySelector: () => null, addEventListener() {}, removeEventListener() {}
+    };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(VUE_FILE, 'utf8'), ctx, { filename: 'vue.js' });
+    // 渲染函数是用 `new Function` 生成的，走**真实全局作用域**，
+    // 所以 Vue 必须挂到 Node 的真全局，否则合法模板也会报 "Vue is not defined"。
+    global.Vue = sandbox.Vue;
+    VUE_COMPILER = sandbox.Vue && sandbox.Vue.compile ? sandbox.Vue : null;
+  } catch (e) {
+    console.log('[提示] Vue 编译器没载入（模板真编译检查跳过）：' + e.message);
+  }
+}
+
 const files = ['api.js', 'data.js', 'court.js', 'components.js', 'app.js',
   'pages/upload.js', 'pages/overview.js', 'pages/stats.js', 'pages/shotchart.js',
   'pages/highlights.js', 'pages/report.js', 'pages/review.js'];
@@ -136,6 +208,15 @@ const results = [];
 Object.keys(win.PAGES).forEach(key => {
   const page = win.PAGES[key];
   checkTemplate(key, page.template);
+  // ---- 真编译一遍（能抓出正则抓不到的模板语法错误）----
+  if (VUE_COMPILER && typeof page.template === 'string') {
+    try {
+      VUE_COMPILER.compile(page.template);
+    } catch (e) {
+      errors.push('[tpl-compile] ' + key + ' 模板编译失败（页面会整块空白）：'
+        + String(e.message).slice(0, 200));
+    }
+  }
   const self = fakeThis(page);
   if (key === 'stats' || key === 'shotchart' || key === 'review') {
     console.log('[debug] ' + key + ' S=' + typeof self.S + ' keys=' +

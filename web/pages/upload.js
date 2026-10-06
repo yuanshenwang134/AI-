@@ -1983,7 +1983,7 @@ window.PAGES['upload'] = {
     '            <img :src="sbPreview.image" draggable="false"',
     '              style="width:100%;display:block;cursor:crosshair;user-select:none"',
     '              @mousedown="sbBoxDown" @mousemove="sbBoxMove" @mouseup="sbBoxUp" @mouseleave="sbBoxUp" />',
-    '            <svg v-if="sbRect" :viewBox="\'0 0 1 1" preserveAspectRatio="none"',
+    '            <svg v-if="sbRect" :viewBox="\'0 0 1 1\'" preserveAspectRatio="none"',
     '              style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none">',
     '              <rect :x="Math.min(sbRect.x0,sbRect.x1)" :y="Math.min(sbRect.y0,sbRect.y1)"',
     '                :width="Math.abs(sbRect.x1-sbRect.x0)" :height="Math.abs(sbRect.y1-sbRect.y0)"',
