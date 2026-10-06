@@ -74,8 +74,14 @@ for (const rel of FILES) {
   const names = new Set();
   // ① v-for 的迭代对象（后面不能跟括号，那是调用）
   for (const m of tpl.matchAll(/v-for="[^"]*?\bin\s+([A-Za-z_$][\w$]*)\s*(?![\w$(])/g)) names.add(m[1]);
-  // ② 属性访问 X.something —— 明确是取值
-  for (const m of tpl.matchAll(/([A-Za-z_$][\w$]*)\.(?:length|filter|map|slice|join|toFixed|includes|forEach)/g)) names.add(m[1]);
+  // ② **任何**属性访问 X.something —— 明确是取值。
+  //    第一版只列了 .length/.filter 这类白名单，结果漏掉 `sbRect.x0`
+  //    （我自己新写的代码正好踩中，选择框永远画不出来）→ 改成匹配任意属性名。
+  for (const m of tpl.matchAll(/([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)/g)) {
+    if (['Math', 'JSON', 'Object', 'String', 'Number', 'Array', 'Date',
+         'Boolean', 'RegExp', 'Promise'].includes(m[1])) continue;
+    names.add(m[1]);
+  }
   // ③ 插值 {{ X }}（纯名字，不带括号）
   for (const m of tpl.matchAll(/\{\{\s*!?\s*([A-Za-z_$][\w$]*)\s*(?![\w$(])/g)) names.add(m[1]);
 

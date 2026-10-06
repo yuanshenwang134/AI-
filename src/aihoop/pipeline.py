@@ -521,6 +521,19 @@ def _evidence_meta(rt: RawTrack) -> dict:
         meta["teams"] = d["teams"]
     if d.get("scoreboard_error"):
         meta["scoreboard_error"] = d["scoreboard_error"]
+    # ⚠️ `ocr_scoreboard_error` 是**另一条**错误（OCR 路径抛异常），以前只转发
+    # `scoreboard_error`（模板路径），于是"比分牌自动定位失败"这件事**从来没到达
+    # 界面** —— 用户看到的就是"比分一直是 0:0，按计分板判进球的功能没了"
+    # （实测原话）。这里连同 sources 给的行动建议一起转发。
+    if d.get("ocr_scoreboard_error"):
+        meta["scoreboard_error"] = (
+            meta.get("scoreboard_error") or d["ocr_scoreboard_error"]
+            or d.get("ocr_scoreboard_error"))
+        meta["ocr_scoreboard_error"] = d["ocr_scoreboard_error"]
+    if d.get("scoreboard_action"):
+        meta["scoreboard_action"] = d["scoreboard_action"]
+    if d.get("scoreboard_absent"):
+        meta["scoreboard_absent"] = True
     # ---- 球员球场坐标的来源与质量（战术层门槛要用，前端也要显示）----
     # 静态标定不可用时，sources 会自动改用**逐帧滑动标定**把球员投成球场坐标
     # （player_track_source == "sliding_calibration"）。它没有经过独立校验，
@@ -802,8 +815,16 @@ def _no_score_reasons(meta: dict, sb: dict, include_scoreboard: bool = True) -> 
         if meta.get("scoreboard_error"):
             reasons.append("比分牌：" + str(meta["scoreboard_error"]).split("\n")[0][:90])
         elif sb.get("frames_read"):
-            reasons.append(f"比分牌：一帧都没读出来（0/{sb['frames_read']}）——"
-                           "这段视频的台标和已标定的模板不匹配")
+            # 读到了帧但一帧都没命中：说清"是台标不匹配"，并给出**最省事的做法**。
+            # 以前只说"和已标定的模板不匹配"，用户不知道下一步该干什么
+            # （实测："按计分板判断进球的功能没了"，其实是要框选一下）。
+            _act = str(meta.get("scoreboard_action") or "").strip()
+            reasons.append(
+                f"比分牌：一帧都没读出来（0/{sb['frames_read']}）——"
+                "这段视频的台标和已标定的模板不匹配。"
+                + ("最省事的做法：" + _act if _act else
+                   "最省事的做法：在「上传与分析」页点**「框选比分牌」**，"
+                   "在画面上把比分牌拖一个框圈起来，再读一次。"))
         else:
             reasons.append("比分牌：未启用")
     if meta.get("visual_error"):

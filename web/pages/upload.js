@@ -143,7 +143,18 @@ window.PAGES['upload'] = {
       sbResult: null,          // {ok, method, box, ocr_hit, n_crops, events, final, path, note}
       sbStartHome: null,       // 起始比分（可选；视频从半场中间开始录时填上更稳）
       sbStartAway: null,
-      sbBox: ''                // 手动框选用：归一化 "x0,y0,x1,y1"；留空=自动定位
+      sbBox: '',                // 手动框选用：归一化 "x0,y0,x1,y1"；留空=自动定位
+      // ---- 「在画面上拖框选中比分牌」----
+      // 为什么要有（用户实测："按计分板判断进球的功能没了"）：
+      //   自动定位在校园/村 BA 那种长横条台标上会失败，后端返回
+      //   "自动定位的区域没有稳定读到双方比分，请手动框选比分牌" ——
+      //   但当时唯一的入口是一个**要用户自己算归一化坐标的文本框**
+      //   （placeholder 写着 "例如 0.21,0.10,0.79,0.15"）。让人手算坐标
+      //   等于没有这个功能。所以改成真正在画面上拖一个框。
+      sbPreview: null,          // {image, w, h, t}
+      sbPreviewT: 2,            // 取哪一秒的画面来框
+      sbDrag: null,             // 拖动中的归一化矩形 {x0,y0,x1,y1}
+      sbBusyFrame: false,
     };
   },
   computed: {
@@ -230,6 +241,22 @@ window.PAGES['upload'] = {
     mfActivePtsCount: function () {
       if (!this.mfDualSplit) return this.mfPts.length;
       return (this.mfActive === 1 ? this.mfPtsRight : this.mfPtsHere).length;
+    },
+    /** 框选比分牌的归一化矩形：拖动中跟着鼠标，松手后回落到已保存的 sbBox。
+     *
+     *  ⚠️ 必须是 **computed**：模板里用 `sbRect.x0` 之类的取值，放进 methods
+     *  的话模板拿到的是**函数对象**，`sbRect.x0` 是 undefined
+     *  → 选择框永远画不出来（我在这里犯过一次）。
+     *  同类错误还有 miniPtsHere / snapPtsHere，都由
+     *  `tests/test_template_uses_computed_not_methods.js` 守着。
+     */
+    sbRect: function () {
+      if (this.sbDrag) { return this.sbDrag; }
+      var b = String(this.sbBox || '').split(',');
+      if (b.length !== 4) { return null; }
+      var n = b.map(function (x) { return parseFloat(x); });
+      if (n.some(function (x) { return isNaN(x); })) { return null; }
+      return { x0: n[0], y0: n[1], x1: n[2], y1: n[3] };
     },
     // ---- 「只点 4 个点」模式的点（**必须是 computed，不能放 methods**）----
     //
@@ -1234,6 +1261,67 @@ window.PAGES['upload'] = {
       this.courtIdx += 1;
     },
     /** 读比分牌：自动定位（或手动框选）+ 放大 OCR → 得分事件文件 */
+    /** 取一张画面来框选比分牌（默认取第 2 秒；片头可能全黑，所以不取 0 秒）。 */
+    loadSbFrame: function () {
+      var self = this;
+      var v = String(this.videoPath || this.form.video_path || '').trim();
+      if (!v) { this.$message.warning('先填视频路径（或上传视频）'); return; }
+      this.sbBusyFrame = true;
+      window.API.getFrame(v, Number(this.sbPreviewT) || 2).then(function (r) {
+        self.sbBusyFrame = false;
+        self.sbPreview = { image: r.image, w: r.w, h: r.h,
+                           t: Number(self.sbPreviewT) || 2 };
+        self.$message.success('已取到 ' + self.sbPreview.t + 's 的画面，'
+          + '在上面按住鼠标拖一个框把比分牌圈起来');
+      }).catch(function (e) {
+        self.sbBusyFrame = false;
+        self.$message.error('取帧失败：' + String((e && e.message) || e).slice(0, 80));
+      });
+    },
+    /** 把鼠标事件换算成画面内的归一化坐标（用**图片元素**的框，不是容器） */
+    sbXY: function (ev) {
+      var el = (ev.target && ev.target.tagName === 'IMG') ? ev.target
+                                                          : ev.currentTarget;
+      var box = el.getBoundingClientRect();
+      if (!box.width || !box.height) { return null; }
+      var x = (ev.clientX - box.left) / box.width;
+      var y = (ev.clientY - box.top) / box.height;
+      return { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
+    },
+    sbBoxDown: function (ev) {
+      var p = this.sbXY(ev);
+      if (!p) { return; }
+      this.sbDrag = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+      ev.preventDefault();
+    },
+    sbBoxMove: function (ev) {
+      if (!this.sbDrag) { return; }
+      var p = this.sbXY(ev);
+      if (!p) { return; }
+      this.sbDrag.x1 = p.x;
+      this.sbDrag.y1 = p.y;
+      ev.preventDefault();
+    },
+    sbBoxUp: function () {
+      var d = this.sbDrag;
+      if (!d) { return; }
+      this.sbDrag = null;
+      // 规范化成 x0<x1、y0<y1，并丢掉"点一下就松手"的误触
+      var x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1);
+      var y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
+      if ((x1 - x0) < 0.01 || (y1 - y0) < 0.005) {
+        this.$message.warning('框太小了：请按住左键拖出一个能盖住比分的矩形');
+        return;
+      }
+      this.sbBox = [x0, y0, x1, y1].map(function (v) { return v.toFixed(4); }).join(',');
+      this.$message.success('已框选比分牌 → ' + this.sbBox
+        + '（点「读比分牌」开始 OCR）');
+    },
+    sbClearBox: function () {
+      this.sbBox = '';
+      this.sbDrag = null;
+      this.$message.info('已清空框选，改回自动定位');
+    },
     readScoreboard: function () {
       var self = this;
       var v = String(this.videoPath || this.form.video_path || '').trim();
@@ -1883,8 +1971,28 @@ window.PAGES['upload'] = {
     '            （视频从半场中间开始录时用它当基线）。</div>',
     '          <el-input v-model="form.scoreboard_events" size="small" clearable style="margin-top:6px"',
     '            placeholder="得分事件文件路径（点上面的按钮自动填；也可手填 out\\\\sb_events.json）" />',
+    // ---- 框选比分牌：**在画面上拖**，而不是让用户手算归一化坐标 ----
+    '          <div class="row" style="margin-top:8px;align-items:center;gap:8px;flex-wrap:wrap">',
+    '            <el-button size="small" @click="loadSbFrame" :loading="sbBusyFrame">',
+    '              框选比分牌（取一张画面）</el-button>',
+    '            <span class="hint">取哪一秒：</span>',
+    '            <el-input-number v-model="sbPreviewT" :min="0" :max="99999" :step="1" size="small" style="width:110px" />',
+    '            <el-button v-if="sbBox" size="small" text @click="sbClearBox">清空框选（改回自动定位）</el-button>',
+    '          </div>',
+    '          <div v-if="sbPreview" style="margin-top:8px;max-width:720px;position:relative">',
+    '            <img :src="sbPreview.image" draggable="false"',
+    '              style="width:100%;display:block;cursor:crosshair;user-select:none"',
+    '              @mousedown="sbBoxDown" @mousemove="sbBoxMove" @mouseup="sbBoxUp" @mouseleave="sbBoxUp" />',
+    '            <svg v-if="sbRect" :viewBox="\'0 0 1 1" preserveAspectRatio="none"',
+    '              style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none">',
+    '              <rect :x="Math.min(sbRect.x0,sbRect.x1)" :y="Math.min(sbRect.y0,sbRect.y1)"',
+    '                :width="Math.abs(sbRect.x1-sbRect.x0)" :height="Math.abs(sbRect.y1-sbRect.y0)"',
+    '                fill="rgba(64,158,255,.25)" stroke="#409eff" stroke-width="0.006"',
+    '                vector-effect="non-scaling-stroke" />',
+    '            </svg>',
+    '          </div>',
     '          <el-input v-model="sbBox" size="small" clearable style="margin-top:6px"',
-    '            placeholder="手动框选（可选）：归一化 x0,y0,x1,y1，例如 0.21,0.10,0.79,0.15；留空=自动定位" />',
+    '            placeholder="框选结果（归一化 x0,y0,x1,y1；留空=自动定位）—— 用上面的画面拖出来，不用手填" />',
     '          <el-alert v-if="sbResult" style="margin-top:8px" :closable="false" show-icon',
     "            :type=\"sbResult.loading ? 'info' : (sbResult.ok ? 'success' : 'error')\"",
     "            :title=\"sbResult.loading ? '正在定位并 OCR…（十几秒到一分钟）' : (sbResult.ok ? ('读出 ' + (sbResult.n_events||0) + ' 个得分事件，最终 ' + ((sbResult.final||{}).home) + ' : ' + ((sbResult.final||{}).away)) : '没读出比分')\"",

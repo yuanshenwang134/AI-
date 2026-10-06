@@ -190,6 +190,12 @@ window.PAGES['overview'] = {
       if (ve) { lines.push('为什么没判出来：' + String(ve).slice(0, 180)); }
       if (m.scoreboard_error) {
         lines.push('比分牌路径：' + String(m.scoreboard_error).slice(0, 140));
+        // 光说"读取失败"等于没说 —— 必须给出**最省事的下一步**。
+        // 用户实测原话"按计分板判断进球的功能没了"，其实只是自动定位失败，
+        // 在画面上把比分牌拖一个框圈起来就好（现在有真正的拖框界面了）。
+        lines.push('  → 下一步：在「上传与分析」页点**「框选比分牌」**，'
+          + '取一张画面，' + '在上面把比分牌拖一个框圈起来，再点「读比分牌」。'
+          + (m.scoreboard_action ? ('（' + String(m.scoreboard_action) + '）') : ''));
       }
       if (m.court_outputs_unverified) {
         lines.push('另外：热区/战术图用的是你手动标的标定，'
