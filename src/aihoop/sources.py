@@ -872,6 +872,7 @@ class VideoSource:
         scoreboard_events=None,
                  basket_labels=None,
                  basket_model=None,
+                 multi_cal=None,
                  shot_engine: str = "legacy", legacy_center_lock: bool = False):
         if shot_engine not in ("legacy", "geometry"):
             raise ValueError("shot_engine 必须为 legacy 或 geometry")
@@ -910,6 +911,11 @@ class VideoSource:
                              else "court")
         # 手动篮筐提示 (cx, cy, r?)；移动机位/复杂场景下用它锁定篮筐。
         self.hoop_hint = hoop_hint
+        # 多机位标定（multical.MultiCal）：**每个镜头一份 H**。
+        # 为什么需要：一台机位拍不到全场，实际素材常是"两个机位各拍半场"。
+        # 两个机位没有共同坐标系，用其中一份 H 去投另一个镜头的画面，
+        # 球员会被投到球场外（实测）。所以按帧所属镜头取标定：`_cal_at(t)`。
+        self.multi_cal = multi_cal
         # 逐帧滑动标定（calibcheck.sliding_calibration 的结果）。
         # 给了它就用**每一帧各自的 H** 投球员，而不是一份静态 H ——
         # 实测真实素材（含所谓固定机位）几十秒就会漂到边线跑掉，
@@ -1481,7 +1487,11 @@ class VideoSource:
                 xm, ym = apply_homography(Hf, c.x, c.y)
                 xm, ym = fold_to_analysis(xm, ym, "half")
             elif rt.detections_meta.get("calibration_valid"):
-                xm, ym = self.cal.to_court(c.x, c.y)
+                # 多机位时按**这一帧所属镜头**取标定（单机位就是 self.cal）
+                _c = self._cal_at(c.t)
+                if _c is None or not _c.H:
+                    continue
+                xm, ym = _c.to_court(c.x, c.y)
             else:
                 continue
             rt.ball_track.append(BallSample(t=round(c.t, 3), x=round(xm, 3),
@@ -1607,7 +1617,11 @@ class VideoSource:
                         # sliding 的目标点本身就是折半坐标（half_court=True 时）
                         px, py = fold_to_analysis(px, py, "half")
                     else:
-                        px, py = self.cal.to_court(foot_x, foot_y)
+                        # 多机位时按**这一帧所属镜头**取标定
+                        _c = self._cal_at(tt)
+                        if _c is None or not _c.H:
+                            continue
+                        px, py = _c.to_court(foot_x, foot_y)
                     # 只保留**真正落在场内**的点。这一刀很关键：广播镜头里
                     # 同时会检出替补席、裁判、观众（实测 30 秒里 83 条轨迹），
                     # 它们站在边线外/中线外/底线后方，投影出来正好贴着边线或
@@ -1616,7 +1630,8 @@ class VideoSource:
                     # 范围必须取"这份标定实际覆盖的球场"，不能写死 |y|<=14：
                     # 半场标定只覆盖 y∈[-14,0]（或 [0,14]），用对称范围会把
                     # 远底线后方的观众当成场内球员收进来。
-                    if not self.cal.in_court(px, py, tol=0.12):
+                    _cc = self._cal_at(tt) or self.cal
+                    if not _cc.in_court(px, py, tol=0.12):
                         continue
                     rt.player_track.append(PlayerSample(
                         t=round(float(tt), 3), player_id=pid, team=team,
@@ -2160,6 +2175,20 @@ class VideoSource:
                         for a in atts if a.team == "away")}
 
     # ------------------------------------------------------------------
+    def _cal_at(self, t: float):
+        """取 t 时刻该用哪份标定。
+
+        多机位（multi_cal 有 segments）时按"这一帧属于哪个镜头"取那一份 H；
+        单机位就直接用 self.cal —— 调用方不用关心是哪种。
+        为什么必须按帧取：两个机位没有共同坐标系，用错一份 H 投出来的球员
+        会整片落在球场外（实测把球员投到边线外好几米）。
+        """
+        mc = getattr(self, "multi_cal", None)
+        if mc is None:
+            return self.cal
+        c = mc.cal_at(t)
+        return c if c is not None else self.cal
+
     def _calibration_matches(self, W: int, H: int) -> bool:
         """标定文件是不是这段视频的。
 
@@ -2169,7 +2198,22 @@ class VideoSource:
         所以标定文件现在显式记录它属于哪个视频（`for_video`），对不上就拒绝。
         """
         if not self.cal or not self.cal.H:
+            # 多机位：self.cal 只是"主标定"那份，也可能为空 —— 只要有一段对得上就算对得上
+            mc = getattr(self, "multi_cal", None)
+            if mc is not None:
+                try:
+                    return bool(mc.matches_video(self.video_path, W, H))
+                except Exception:                            # noqa: BLE001
+                    return False
             return False
+        mc = getattr(self, "multi_cal", None)
+        if mc is not None and len(getattr(mc, "segments", []) or []) > 1:
+            # 多机位：任意一段与本视频匹配即可（每段都是同一台机器的不同镜头）
+            try:
+                if mc.matches_video(self.video_path, W, H):
+                    return True
+            except Exception:                                # noqa: BLE001
+                pass
         return bool(self.cal.matches_video(self.video_path, W, H))
 
     # ------------------------------------------------------------------

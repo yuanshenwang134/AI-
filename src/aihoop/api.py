@@ -276,8 +276,22 @@ def _run_job(job_id: str, req: JobCreate) -> None:
                 cal_path = DATA / "calibration.json"
             from .court import Calibration
             from .sources import VideoSource
+            # 多机位标定：同一份 json 里可能带 `segments`（每个镜头一份 H）。
+            # 有它就必须按帧所属镜头取标定 —— 两个机位没有共同坐标系，
+            # 用其中一份 H 去投另一个镜头的画面会把球员投到球场外（实测过）。
+            multi_cal = None
             if cal_path.exists():
                 cal = Calibration.load(str(cal_path))
+                try:
+                    from .multical import MultiCal
+                    _raw = json.loads(cal_path.read_text(encoding="utf-8")) or {}
+                    multi_cal = MultiCal.from_dict(_raw)
+                    if multi_cal is not None:
+                        _update(st, message="多机位标定：%d 个镜头各自一份标定"
+                                            % len(multi_cal.segments))
+                except Exception as e:                       # noqa: BLE001
+                    multi_cal = None
+                    _update(st, message="多机位标定读取失败（按单镜头处理）：%s" % e)
             elif (not req.detect_players and req.score_policy == "scoreboard") \
                     or getattr(req, "allow_no_calibration", False):
                 # 没有标定也允许跑：管线本来就支持（位置类结论会被自动关掉，
@@ -369,7 +383,8 @@ def _run_job(job_id: str, req: JobCreate) -> None:
                               manual_hoop=manual_hoop,
                               scoreboard_events=getattr(req, "scoreboard_events",
                                                         None),
-                              basket_labels=basket_labels)
+                              basket_labels=basket_labels,
+                              multi_cal=multi_cal)
             rt = src.run(progress=lambda p, m="视频推理中": _update(
                 st, progress=0.05 + p * 0.55, message=m))
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -1410,6 +1425,61 @@ COURT_LANDMARKS = {
 }
 
 
+def _write_calibration(out_p: Path, data: dict) -> None:
+    """写标定文件 —— **覆盖前先备份**，并且是原子写。
+
+    为什么要备份（我踩过，且无法挽回）：
+      标定文件 `data/calibration_<stem>.json` **不被 git 跟踪**（在 .gitignore 里），
+      所以一旦覆盖就没有任何恢复途径。我测试时直接用它写了一份合成的假标定，
+      把用户原有的标定覆盖掉了，**找不回来**（搜遍了 out/ 和 .bak 都没有副本）。
+      用户的标定是手工在画面上一个个点出来的，重做成本很高。
+
+    所以这里定两条规矩：
+      ① 覆盖前把原文件复制到 `*.bak`（并保留上一份 `*.bak1`）—— 至少能退回一步；
+      ② 先写临时文件再 replace —— 中途失败不会留下半截文件（原来直接
+         write_text，掉电/异常会把标定写成残缺 JSON，等于毁掉）。
+    """
+    out_p = Path(out_p)
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    if out_p.exists():
+        try:
+            bak1 = out_p.with_suffix(out_p.suffix + ".bak1")
+            bak = out_p.with_suffix(out_p.suffix + ".bak")
+            if bak.exists():
+                bak.replace(bak1)          # 上一份备份降级保留
+            import shutil
+            shutil.copy2(out_p, bak)
+        except Exception:                  # noqa: BLE001  备份失败不能挡住保存
+            pass
+    tmp = out_p.with_suffix(out_p.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                   encoding="utf-8")
+    tmp.replace(out_p)                     # 原子替换
+
+
+def _video_duration(video_path: str) -> float:
+    """视频时长（秒）。拿不到就返回 0，调用方按"不封顶"处理。"""
+    try:
+        import cv2
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            return 0.0
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        n = float(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0)
+        cap.release()
+        if fps > 0 and n > 0:
+            return round(n / fps, 3)
+    except Exception:                                   # noqa: BLE001
+        pass
+    return 0.0
+
+
+def _split_marks_by_shot(video_path: str, times: list) -> tuple:
+    """把标点时刻按镜头分组（薄封装，方便测试时替换掉）。"""
+    from .multical import split_times_by_shot
+    return split_times_by_shot(video_path, times)
+
+
 def _minimal_quad_models():
     """"只点 4 个点"时，候选的球场地物组合（穷举，交给评分挑）。
 
@@ -2442,6 +2512,8 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
 
     label_of = {d["name"]: d["label"] for d in COURT_LABELS}
     src, dst, tags = [], [], []
+    # 逐帧收集点 —— 「多机位」路径要用它按镜头分组（见下面的 per-shot 分支）。
+    per_frame: dict = {}
     for fr in (req.frames or []):
         t = float(fr.get("t", 0.0))
         for name, xy in (fr.get("landmarks") or {}).items():
@@ -2460,6 +2532,71 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             tags.append({"name": name,
                          "label": lab or label_of.get(name, name),
                          "t": round(t, 2)})
+            slot = per_frame.setdefault(round(t, 3), {"t": round(t, 3),
+                                                      "px": [], "dst": [],
+                                                      "names": []})
+            slot["px"].append([float(xy[0]) * W, float(xy[1]) * H])
+            slot["dst"].append(list(COURT_LANDMARKS[name]))
+            slot["names"].append(name)
+
+    # ---- 多机位：按镜头分别解算（绝不跨镜头合并）---------------------------
+    #
+    # 用户的原话："一个镜头怎么可能看到全场啊，就是两个镜头标点，按照标出来的点
+    # 算战术图和投篮热区啊"。这是对的：一台机位拍不到全场，真实工作流是两个机位
+    # 各拍半场。而两个机位**没有共同坐标系** —— 把两边的点混在一起解**一个**单应
+    # 矩阵在数学上不成立（用户反复看到的"解算失败/点互相矛盾"就是这么来的）。
+    #
+    # 所以：先把用户标点的时刻按镜头分组；**只有当确实落在 2 个以上镜头时**才走
+    # 这条路径（每镜头各解一份 H，各自覆盖自己的时间段），否则照走原来的单镜头逻辑。
+    if len(per_frame) >= 2 and len(src) >= 4:
+        try:
+            from .multical import solve_per_shot
+            groups, cuts = _split_marks_by_shot(str(vp),
+                                                [f["t"] for f in per_frame.values()])
+        except Exception as e:                                   # noqa: BLE001
+            groups, cuts = [], []
+            comp_err = "%s: %s" % (type(e).__name__, e)
+        if len(groups) > 1:
+            got = solve_per_shot(str(vp), list(per_frame.values()),
+                                 duration=_video_duration(str(vp)),
+                                 frame_grab=lambda tt: _frame_bgr(vp, tt))
+            mc = got.get("multical")
+            if mc is not None and len(mc.segments) >= 2:
+                rev_out = None
+                if bool(getattr(req, "confirm", False)):
+                    out_p = _calibration_path_for(str(vp))
+                    old_rev = 0
+                    if out_p.exists():
+                        try:
+                            old_rev = int((json.loads(
+                                out_p.read_text(encoding="utf-8")) or {}
+                            ).get("revision") or 0)
+                        except Exception:                        # noqa: BLE001
+                            old_rev = 0
+                    req_rev = getattr(req, "revision", None)
+                    if req_rev is not None and int(req_rev) != old_rev:
+                        raise HTTPException(
+                            409, "标定已被其它页面修改（当前 revision=%d），请刷新后重试"
+                                 % old_rev)
+                    out_p.parent.mkdir(parents=True, exist_ok=True)
+                    data = mc.to_dict()
+                    data["revision"] = old_rev + 1
+                    data["video_path"] = str(vp)
+                    _write_calibration(out_p, data)
+                    rev_out = old_rev + 1
+                return {
+                    "ok": True, "multi_shot": True, "via": "per-shot",
+                    "n_points": len(src),
+                    "rmse_m": round(max(s.rmse_m for s in mc.segments), 3),
+                    "n_segments": len(mc.segments),
+                    "segments": mc.summary()["segments"],
+                    "cuts": [round(float(c), 2) for c in (cuts or [])],
+                    "note": "；".join(got.get("notes") or []),
+                    "saved": rev_out is not None, "revision": rev_out,
+                    "calibration_fit": {
+                        "ratio": round(max(s.ratio for s in mc.segments), 3)},
+                    "position_unverified": False,
+                }
     seg_info: list = []
     dropped: list = []
     comp_note = ""
@@ -2965,8 +3102,7 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                 "position_unverified": bool(tolerant),
                 "outliers": outliers,
             })
-            out_p.write_text(json.dumps(data, ensure_ascii=False, indent=2),
-                             encoding="utf-8")
+            _write_calibration(out_p, data)
         except Exception as e:  # noqa: BLE001
             raise HTTPException(500, f"标定写盘失败：{e}")
         rev_out = old_rev + 1
