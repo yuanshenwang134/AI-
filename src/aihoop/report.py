@@ -125,6 +125,12 @@ def build_report_md(game: dict, players: list[dict], shots: list[Shot],
         A("> 下面的 **0 : 0 只表示「没有检测到得分」，不等于双方真的都没得分**。")
         A("> 如果这段素材里确实有进球，请在「复核页」人工补录，"
           "或者针对这个频道重跑一次比分牌模板标定。")
+        # 只说"没检测到篮筐"没有用 —— 用户要知道**下一步做什么**。
+        # 标篮筐只要一个点，是这条链上最便宜的一环（实测用户就卡在这里，
+        # 看到的是"战术图、投篮热区啥都没检测出来"，完全不知道该怎么办）。
+        if jg.get("next_step"):
+            A("> ")
+            A(f"> **{jg['next_step']}**")
         A("")
     policy = str(game.get("score_policy", "scoreboard") or "scoreboard").lower()
     # 带入分到底算没算进总分 —— 直接看管线给的结论，别再用 policy 去猜：

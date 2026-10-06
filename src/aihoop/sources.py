@@ -1117,6 +1117,16 @@ class VideoSource:
         if self.cal is not None:
             rt.detections_meta["calibration_method"] = getattr(
                 self.cal, "method", "") or ""
+            # ⚠️ 这个标志以前**只被 pipeline 读、从来没人写** —— 于是
+            # pipeline 里那条"手动标定放行出热区/战术图"的口子**永远不生效**：
+            # 用户辛苦标了几轮，吻合度差一点（ratio 1.02 < 1.25）就只剩一句
+            # "机位/分辨率不匹配"，热区/战术图一个都不出（实测原话：
+            # "战术图，投篮热区啥都没检测出来"）。这里把它补上。
+            _m = str(rt.detections_meta["calibration_method"]).lower()
+            rt.detections_meta["calibration_is_manual"] = (
+                _m.startswith(("web-keypoints", "web_keypoints", "manual",
+                               "auto-identify"))
+                or "keypoints" in _m or "manual" in _m)
             # 注意：**不能用 `or 99.0`** —— 标定误差正好是 0.0 时会被当成假值，
             # 于是"0 米误差的完美标定"被记成 99 米，热区/战术图又被关掉
             # （实测踩到：标定 0.00m、门禁却显示 calibration_rmse_m=99.0）。

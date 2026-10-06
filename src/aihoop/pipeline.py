@@ -699,6 +699,32 @@ def _sliding_homography_sane(meta: dict) -> tuple[bool, str]:
         "这份自动标定不能用来出战术图。" % (f[0], f[1]))
 
 
+def _hoop_next_step(meta: dict) -> str:
+    """没检测到篮筐时，给出**可执行的下一步**（而不是只说"没有可用篮筐"）。
+
+    为什么需要（用户实测 2026-10-06）：那次报告只写了一句
+    「视觉路径：没有检测到可用篮筐，无法确认投篮结果」，然后就是一片 0 ——
+    用户看到的是"战术图、投篮热区啥都没检测出来"，完全不知道该怎么办。
+
+    完整因果链（查过真实产物）：
+        篮筐没标定/没识别出 → 判不出出手（0 次）
+            ├─→ 投篮热区：空（没有出手可画）
+            └─→ 战术图：另受标定吻合度卡住
+    所以这里把"标一次篮筐"这一步明确写出来 —— 它是这条链上**最便宜的一环**。
+    """
+    reasons = " ".join(str(x) for x in
+                       ((meta.get("visual") or {}).get("reasons") or []))
+    no_hoop = ("篮筐" in reasons) or (not reasons and
+                                      not (meta.get("hoop") or
+                                           meta.get("hoop_px")))
+    if not no_hoop:
+        return ""
+    return ("**下一步（最省事的一环）**：在「上传与分析」页点**「标篮筐」**，"
+            "在画面上点一下篮筐中心即可 —— 它只需要**一个点**。"
+            "标完之后重新分析，出手、命中、投篮热区才会出来；"
+            "不标的话，这一整条链（出手判定 → 命中 → 热区）都无从计算。")
+
+
 def _judgement(meta: dict, shots: list) -> dict:
     """这次到底「判出来了」还是「判不了」，以及为什么。
 
@@ -726,12 +752,14 @@ def _judgement(meta: dict, shots: list) -> dict:
         # （实测踩到：夜间手持素材的篮筐检测漂移 781px、视觉判定被主动放弃，
         #  产物里却只有一句"本片段未检测到进球"，等于把失败藏进了 0 分）。
         reasons = _no_score_reasons(meta, sb, include_scoreboard=False)
+        _nxt = _hoop_next_step(meta)
         if meta.get("visual_error"):
             return {"state": "cannot_judge",
                     "note": "视觉路径没能跑起来，本片段无法判定有没有进球。",
-                    "reasons": reasons}
+                    "reasons": reasons,
+                    "next_step": _nxt}
         return {"state": "court", "note": "本片段未检测到进球。",
-                "reasons": reasons}
+                "reasons": reasons, "next_step": _nxt}
     if sb.get("frames_hit"):
         unmatched = [s for s in shots if s.made and not s.counts_for_score]
         counted = [s for s in shots if s.made and s.counts_for_score]
