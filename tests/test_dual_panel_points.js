@@ -173,12 +173,14 @@ const namesOf = (v) => v.courtItems.slice(0, 5).map((i) => i.name);
 {
   const fs = require('node:fs');
   const src = fs.readFileSync(path.resolve(__dirname, '../web/pages/upload.js'), 'utf8');
-  const iLeft = src.indexOf('左画面');
-  const iRight = src.indexOf('右画面：自己的坐标系');
+  // ⚠️ 用**结构锚点**（data-side）定位，不要用中文文案 ——
+  //    文案一改（比如"左画面"→"左侧预览帧"）测试就假失败，实测踩到过。
+  const iLeft = src.indexOf('data-side="0"');
+  const iRight = src.indexOf('data-side="1"');
   assert.ok(iLeft > 0 && iRight > iLeft, '应当能定位到左右两个画面的模板片段');
 
   const leftTpl = src.slice(iLeft, iRight);
-  const rightTpl = src.slice(iRight, iRight + 3000);
+  const rightTpl = src.slice(iRight, iRight + 3600);
 
   assert.ok(leftTpl.includes('in mfPtsHere'), '左画面必须渲染 mfPtsHere（它自己那一帧的点）');
   assert.ok(!leftTpl.includes('in activePts" :key="i"'),

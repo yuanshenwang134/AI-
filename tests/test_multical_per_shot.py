@@ -149,6 +149,41 @@ def test_split_times_by_shot_keeps_close_times_together():
     assert len(groups) == 1, "相邻 1.5s 不该被切成两段：%s" % groups
 
 
+@pytest.mark.skipif(not os.path.exists(VIDEO), reason="示例视频不在")
+def test_cut_discriminator_uses_geometry_not_pixel_diff():
+    """切镜判据必须是**几何一致性**（内点率），不能只看像素差。
+
+    为什么钉这条（实测两次判错）：本素材上"同一镜头相隔 1.5 秒"的两帧
+    （快攻 + 摇镜）MAD 能到 54，而"不同镜头"才 82 —— 区间重叠，固定阈值和
+    "中位数倍数"的自适应阈值都分不开。真正能分开的是 ORB 内点率：
+    同镜头 43~52 个内点，不同镜头 6~8 个。
+    """
+    from aihoop.multical import _orb_inliers, _sample
+    s = _sample(VIDEO, [15.2, 16.7, 16.15, 60.9])
+    same = _orb_inliers(s[0], s[1])
+    diff = _orb_inliers(s[2], s[3])
+    assert same is not None and diff is not None, "ORB 必须能跑（返回 None 说明静默退化了）"
+    assert same >= 20, "同镜头应当有大量几何内点：%s" % same
+    assert diff <= 10, "不同镜头内点应当极少：%s" % diff
+    assert same > diff * 3, "两者要有明显区分度：同 %s vs 异 %s" % (same, diff)
+
+
+@pytest.mark.skipif(not os.path.exists(VIDEO), reason="示例视频不在")
+def test_shot_split_is_fast_enough_for_the_ui():
+    """分镜必须在几秒内完成 —— 否则前端超时，用户只看到
+    "signal is aborted without reason"（实测就是这个问题）。
+
+    关键优化：**一次打开视频批量采样**（原来每个时刻都新开一次 VideoCapture，
+    单次 0.335s，20 个采样点就是 7 秒）。
+    """
+    import time
+    from aihoop.multical import split_times_by_shot
+    t0 = time.time()
+    split_times_by_shot(VIDEO, [16.15, 60.9])
+    dt = time.time() - t0
+    assert dt < 12.0, "分镜耗时 %.1fs 太慢（前端会超时）" % dt
+
+
 # --------------------------------------------------------------- 写盘要备份
 def _workdir(name: str):
     """测试用目录 —— 必须放在**工作区内**。

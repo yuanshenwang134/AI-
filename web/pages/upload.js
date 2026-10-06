@@ -905,6 +905,24 @@ window.PAGES['upload'] = {
       return frames;
     },
     /** 4 点模式的解算/保存 */
+    /** 把标定解算的报错翻译成人话。
+     *
+     *  为什么需要：标定解算是重操作（抓帧 + 算投影线吻合度 + 跨镜头时定位切镜），
+     *  请求被浏览器超时中断时，Promise 的报错原文是
+     *  **"signal is aborted without reason"** —— 用户看到这行英文完全不知道
+     *  发生了什么，只会以为"功能坏了"（实测原话："完全不行啊，你能说白吗"）。
+     */
+    calibErrMsg: function (e) {
+      var msg = (e && e.message) ? String(e.message) : String(e || '');
+      if ((e && e.name === 'AbortError') ||
+          /aborted|abort|signal is aborted/i.test(msg)) {
+        return '后端算太久被浏览器中断了（不是标定点的问题）。'
+          + '跨镜头标定要定位切镜、逐段解算，本身比较慢；'
+          + '已把超时放宽到 3 分钟，请再点一次「先预览」。'
+          + '若反复超时，请确认后端窗口还在跑（没被关掉）。';
+      }
+      return msg || '未知错误';
+    },
     miniSolve: function (confirm) {
       var self = this;
       var frames = this.miniPayload();
@@ -936,7 +954,7 @@ window.PAGES['upload'] = {
         }
       }).catch(function (e) {
         self.markSaving = false;
-        self.$message.error('解算失败：' + (e && e.message ? e.message : e));
+        self.$message.error('解算失败：' + self.calibErrMsg(e));
       });
     },
     /** 重点当前这一幅（清掉它的 4 个点） */
@@ -984,7 +1002,7 @@ window.PAGES['upload'] = {
         }
       }).catch(function (e) {
         self.markSaving = false;
-        self.$message.error('解算失败：' + (e && e.message ? e.message : e));
+        self.$message.error('解算失败：' + self.calibErrMsg(e));
       });
     },
     saveCourtMulti: function () {
@@ -1024,7 +1042,7 @@ window.PAGES['upload'] = {
         }
       }).catch(function (e) {
         self.markSaving = false;
-        self.$message.error('解算失败：' + (e && e.message ? e.message : e));
+        self.$message.error('解算失败：' + self.calibErrMsg(e));
       });
     },
     /* ---------------- 标定自检：把算出来的球场线画回画面 ----------------
@@ -1288,7 +1306,7 @@ window.PAGES['upload'] = {
         self.courtPreviewed = !!(r && r.ok);
       }).catch(function (e) {
         self.markSaving = false;
-        self.$message.error('解算失败：' + (e && e.message ? e.message : e));
+        self.$message.error('解算失败：' + self.calibErrMsg(e));
       });
     },
     saveCourt: function () {

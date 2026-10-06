@@ -486,8 +486,12 @@
   API.calibrateAuto = function (payload) {
   return postJSON('/api/calibrate_auto', payload);
 };
-API.calibrateMulti = function (payload) {
-    return API.postJSON(API.base + '/api/calibrate_multi', payload);
+  /* 标定解算是**重操作**（要抓帧、跑投影线吻合度、跨镜头时还要定位切镜），
+     30 秒的默认超时不够：后端还在算，浏览器先 abort，界面只会显示
+     "signal is aborted without reason" —— 用户完全看不出是超时（实测踩到）。
+     给足 180 秒；真出错时后端会自己返回错误，不需要靠超时来兜。 */
+  API.calibrateMulti = function (payload) {
+    return API.postJSON(API.base + '/api/calibrate_multi', payload, 180000);
   };
 
   /* ---- 比分牌：自动定位 / 手动框选 + OCR 读得分事件 ----
