@@ -200,6 +200,54 @@ class MultiCal:
                              for s in self.segments]}
 
 
+# --------------------------------------------------------------- 质量判读
+# 多机位下"**最差的一段**"才是这份标定的真实质量。
+# 为什么单独立成函数（实测事故）：用户那次两段是
+#     段1（0~54s）  rmse=0.97  **ratio=0.34**   ← 投影线与画面白线基本不相关
+#     段2（54~240s）rmse=5.80  ratio=3.12
+# 而界面只读"主标定"那一段、报告取 `max(ratio)` → 报 3.12，
+# **"半个视频坐标全错"完全被盖住**，战术图看着"可用"其实一半的点是错的。
+# 所以判据只写这一处，api 和 sources 都调它，避免两边不一致。
+RMSE_MAX = 1.5          # 平均重投影误差上限（米）
+RATIO_MIN = 1.25        # 投影线与画面白线的吻合度下限（与分析端同一道门槛）
+
+
+def segment_is_weak(seg, rmse_max: float = RMSE_MAX,
+                    ratio_min: float = RATIO_MIN) -> str:
+    """这一段弱在哪；没问题返回空串。"""
+    if float(getattr(seg, "rmse_m", 0.0) or 0.0) > rmse_max:
+        return "重投影误差偏大"
+    r = getattr(seg, "ratio", None)
+    if r is not None and float(r or 0.0) < ratio_min:
+        return "吻合度过低（投影线与画面白线对不上）"
+    return ""
+
+
+def weak_segments(mc, rmse_max: float = RMSE_MAX,
+                  ratio_min: float = RATIO_MIN) -> list:
+    """列出所有不可信的段（空列表 = 每一段都可信）。"""
+    out = []
+    for s in (getattr(mc, "segments", None) or []):
+        why = segment_is_weak(s, rmse_max, ratio_min)
+        if why:
+            out.append({"t_start": s.t_start, "t_end": s.t_end,
+                        "rmse_m": s.rmse_m, "ratio": s.ratio, "why": why})
+    return out
+
+
+def worst_readings(mc) -> dict:
+    """多机位标定的"真实质量" = **最差**那一段的读数。
+
+    不能取 `max(ratio)`：那会把坏段盖住（实测 0.34 / 3.12 → 报 3.12）。
+    """
+    segs = list(getattr(mc, "segments", None) or [])
+    if not segs:
+        return {"rmse_m": None, "ratio": None}
+    ratios = [float(s.ratio) for s in segs if s.ratio is not None]
+    return {"rmse_m": round(max(float(s.rmse_m or 0.0) for s in segs), 3),
+            "ratio": (round(min(ratios), 3) if ratios else None)}
+
+
 # ---------------------------------------------------------------------- 切段
 def plan_segments(duration: float, cuts: list, marks: list,
                   pad: float = 0.0) -> list:

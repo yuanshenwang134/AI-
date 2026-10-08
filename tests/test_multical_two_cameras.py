@@ -28,6 +28,15 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 
 from aihoop.api import _build_multical_from_frames  # noqa: E402
 from aihoop.court import find_homography           # noqa: E402
+from aihoop.multical import MultiCal, Segment      # noqa: E402
+
+
+def _seg(t0, t1, ratio=1.9, rmse=1.1, n=7):
+    """造一段标定（用于质量判读的单元测试）。"""
+    return Segment(t_start=t0, t_end=t1, src_px=[list(p) for p in PX_A],
+                   dst_m=[list(p) for p in COURT], H=list(_h(PX_A)),
+                   frame="full", names=NAMES, rmse_m=rmse, ratio=ratio,
+                   n_points=n)
 
 VIDEO = os.path.join(ROOT, "data", "uploads", "basketball_match_3min.mp4")
 W, H = 1280, 720
@@ -133,6 +142,80 @@ def test_needs_at_least_two_good_frames():
     assert _build_multical_from_frames(_frames(ok_a=True, ok_b=True)[:1],
                                        "v.mp4", W, H) is None
     assert _build_multical_from_frames([], "v.mp4", W, H) is None
+
+
+# --------------------------------------------------- 多机位的"真实质量"判读
+def test_worst_readings_takes_the_bad_segment_not_the_good_one():
+    """多机位的质量读数必须取**最差**那段，不能取 max。
+
+    实测事故（用户那份真实标定）：
+        段1（0~54s）  rmse=0.97  **ratio=0.34**   ← 投影线与白线基本不相关
+        段2（54~240s）rmse=5.80  ratio=3.12
+    旧写法 `max(ratio)` 报 **3.12**，把"半个视频坐标全错"完全盖住，
+    战术图看着"可用"其实一半的点是错的（用户反馈"战术图也不对"）。
+    """
+    from aihoop.multical import weak_segments, worst_readings
+    mc = MultiCal([_seg(0, 54, ratio=0.34, rmse=0.97),
+                   _seg(54, 240, ratio=3.12, rmse=5.80)])
+    wr = worst_readings(mc)
+    assert wr["ratio"] == 0.34, "必须报最差的吻合度：%s" % wr
+    assert wr["rmse_m"] == 5.80, "必须报最差的误差：%s" % wr
+    weak = weak_segments(mc)
+    assert len(weak) == 2, "两段都该被判弱：%s" % weak
+    assert any("吻合度" in w["why"] for w in weak)
+    assert any("误差" in w["why"] for w in weak)
+
+
+def test_all_good_segments_report_no_weak():
+    """每一段都合格时不报弱、不误伤。"""
+    from aihoop.multical import weak_segments, worst_readings
+    mc = MultiCal([_seg(0, 60, ratio=1.8, rmse=1.1),
+                   _seg(60, 200, ratio=2.2, rmse=0.8)])
+    assert weak_segments(mc) == []
+    wr = worst_readings(mc)
+    assert wr["ratio"] == 1.8 and wr["rmse_m"] == 1.1
+
+
+def test_weak_segment_marks_positions_unverified_end_to_end(monkeypatch):
+    """弱段必须让位置结论判为"未校验" —— 界面要如实说，不能照出图。
+
+    这是用户"战术图不对"的根因：一份标定里有一半是错的，工具却报"可用"。
+    """
+    import asyncio
+    import json
+    import pathlib as _pl
+
+    from aihoop import api
+
+    monkeypatch.setattr(api, "_split_marks_by_shot",
+                        lambda video, times: ([sorted(set(times))], []))
+    out = _pl.Path(ROOT) / "_tmp" / "pytest_weakseg"
+    if out.exists():
+        import shutil
+        shutil.rmtree(out, ignore_errors=True)
+    monkeypatch.setattr(api, "_calibration_path_for",
+                        lambda v: out / "calibration_x.json")
+
+    def norm(px):
+        return {n: [p[0] / float(W), p[1] / float(H)]
+                for n, p in zip(NAMES, px)}
+
+    body = {"video_path": "data/uploads/basketball_match_3min.mp4",
+            "compensate": False, "confirm": True, "snap": False,
+            "frames": [{"t": 13.5, "landmarks": norm(PX_A)},
+                       {"t": 73.06, "landmarks": norm(PX_B)}]}
+    r = asyncio.run(api.post_calibrate_multi(api.MultiCalibRequest(**body)))
+    assert r.get("multi_shot") is True
+    # 这两帧的 ratio 在这段素材上是算得出来的，若都达标则不该被误判为弱；
+    # 但接口必须**始终**返回 weak_segments 与 position_unverified 两个字段，
+    # 前端才能如实展示（缺字段会让界面无从判断）。
+    assert "weak_segments" in (r.get("calibration_fit") or {}), \
+        "多机位返回里必须有逐段弱项，界面才能如实说哪个镜头不行"
+    assert "position_unverified" in r
+    saved = out / "calibration_x.json"
+    assert saved.exists()
+    raw = json.loads(saved.read_text(encoding="utf-8"))
+    assert raw.get("multi_shot") is True and len(raw["segments"]) == 2
 
 
 def test_roundtrip_through_json_keeps_both_segments():

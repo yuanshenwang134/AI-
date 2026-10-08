@@ -1142,6 +1142,30 @@ class VideoSource:
             _rmse = getattr(self.cal, "reproj_error_m", None)
             rt.detections_meta["calibration_rmse_m"] = (
                 float(_rmse) if _rmse is not None else 99.0)
+            # ---- 多机位：读数必须取**最差的那一段** ----
+            # 为什么（实测踩到）：`self.cal` 只是"主标定"那一段。用户那次两段是
+            #     段1（0~54s）  6点  rmse=0.97  **ratio=0.34**  ← 投影线与白线基本不相关
+            #     段2（54~240s）7点  rmse=5.80  ratio=3.12
+            # 而界面/报告只读主标定那一段 → "段1 半个视频的坐标全是错的"这件事
+            # **完全没被报出来**，战术图看着"可用"其实一半的点是错的。
+            # 多机位下"最差的一段"才是这份标定的真实质量。
+            mc_segs = list(getattr(getattr(self, "multi_cal", None),
+                                  "segments", []) or [])
+            if len(mc_segs) >= 2:
+                from .multical import weak_segments, worst_readings
+                _wr = worst_readings(self.multi_cal)
+                rt.detections_meta["calibration_rmse_m"] = _wr.get("rmse_m")
+                rt.detections_meta["multi_shot"] = True
+                rt.detections_meta["n_segments"] = len(mc_segs)
+                rt.detections_meta["segments"] = [
+                    {"t_start": s.t_start, "t_end": s.t_end,
+                     "n_points": s.n_points, "rmse_m": s.rmse_m,
+                     "ratio": s.ratio} for s in mc_segs]
+                # 任一段弱 → 位置结论判为未校验（宁可保守，也不要拿错坐标出图）
+                _weak = weak_segments(self.multi_cal)
+                if _weak:
+                    rt.detections_meta["calibration_position_unverified"] = True
+                    rt.detections_meta["calibration_weak_segments"] = _weak
             # 退化（近共线/重合）标定必须在这里就挡掉：它的**重投影误差照样是
             # 0.00m**，只靠误差看不出问题（实测：4 个点几乎共线 → 篮筐被投到
             # 33m 外，界面却显示"标定可用 1.45m"）。判据与读数写进 meta，

@@ -2604,7 +2604,7 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
     # 这条路径（每镜头各解一份 H，各自覆盖自己的时间段），否则照走原来的单镜头逻辑。
     if len(per_frame) >= 2 and len(src) >= 4:
         try:
-            from .multical import solve_per_shot
+            from .multical import solve_per_shot, weak_segments, worst_readings
             groups, cuts = _split_marks_by_shot(str(vp),
                                                 [f["t"] for f in per_frame.values()])
         except Exception as e:                                   # noqa: BLE001
@@ -2647,9 +2647,14 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                     "cuts": [round(float(c), 2) for c in (cuts or [])],
                     "note": "；".join(got.get("notes") or []),
                     "saved": rev_out is not None, "revision": rev_out,
-                    "calibration_fit": {
-                        "ratio": round(max(s.ratio for s in mc.segments), 3)},
-                    "position_unverified": False,
+                    "calibration_fit": dict(
+                        # ⚠️ 取**最差**那一段的读数，**不能取 max**：
+                        # 用户实测两段是 ratio 0.34 / 3.12，取 max 报 3.12
+                        # 就把"半个视频坐标全错"这件事盖住了（我第一版就是这么写的）。
+                        worst_readings(mc),
+                        weak_segments=weak_segments(mc)),
+                    # 任一段弱就算未校验 —— 半份标定不可信时，位置结论整体不可信
+                    "position_unverified": bool(weak_segments(mc)),
                 }
     seg_info: list = []
     dropped: list = []
@@ -3172,10 +3177,17 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
             return {
                 "ok": True, "multi_shot": True, "via": "per-frame",
                 "n_points": len(src), "n_segments": len(_mc2.segments),
-                "rmse_m": round(max(s.rmse_m for s in _mc2.segments), 3),
+                # 取**最差**那段的误差，与 per-shot 路径保持一致
+                "rmse_m": worst_readings(_mc2).get("rmse_m"),
                 "segments": _mc2.summary()["segments"],
                 "saved": rev2 is not None, "revision": rev2,
-                "position_unverified": False,
+                # ⚠️ 必须带上这两个字段（per-shot 路径也有）：
+                # 界面靠它们如实说明"哪个镜头那段不可信"。漏了它们，
+                # 一份标定里就算有一半是错的，界面也只能显示"可用"
+                # —— 用户"战术图不对"就是这么来的。
+                "calibration_fit": dict(worst_readings(_mc2),
+                                        weak_segments=weak_segments(_mc2)),
+                "position_unverified": bool(weak_segments(_mc2)),
                 "per_frame_fit": [{"t": f_.get("t"), "n": f_.get("n"),
                                    "ok": f_.get("ok"),
                                    "rmse_m": f_.get("rmse_m")}
