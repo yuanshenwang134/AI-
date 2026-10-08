@@ -1528,6 +1528,33 @@ def _build_multical_from_frames(per_frame_fit: list, video_path: str,
                     note="按画面分别解算（各自覆盖自己的时间段）")
 
 
+def _multical_note(mc, base: str) -> str:
+    """多机位提示后面追加"哪一段不可信 + 去看叠加自检"的告警。
+
+    为什么必须加（用户实测："我觉的你这个战术图也不对"）：
+      用户那份标定两段是 ratio 0.12 / 0.71（门槛 1.25），
+      但界面只报"误差 0.00m、标定可用"—— 因为**吻合度没被说出来**。
+      用户于是存下去、跑完分析、看到乱掉的战术图，才知道不对。
+      这一环必须**在保存前**就大声说出来。
+    """
+    from .multical import weak_segments as _weak_segments
+    weak = _weak_segments(mc)
+    if not weak:
+        return base
+    detail = "；".join(
+        "t=%.0f~%.0fs（%s，吻合度 %s，误差 %s m）"
+        % (w["t_start"], w["t_end"], w["why"],
+           ("%.2f" % w["ratio"]) if w.get("ratio") is not None else "n/a",
+           ("%.2f" % w["rmse_m"]) if w.get("rmse_m") is not None else "n/a")
+        for w in weak)
+    return (base + " ⚠️（%d/%d 段的标定不可信：%s）。"
+            "判据是**投影出的球场线要压在画面里的真实白线上** —— "
+            "请打开「叠加球场线自检」看一眼：红线没压在白线上，"
+            "说明某个地名配错了、或者点标错了位置；"
+            "这种标定存下去只会得到错的战术图和热区。"
+            % (len(weak), len(getattr(mc, "segments", []) or []), detail))
+
+
 def _split_marks_by_shot(video_path: str, times: list) -> tuple:
     """把标点时刻按镜头分组（薄封装，方便测试时替换掉）。"""
     from .multical import split_times_by_shot
@@ -2568,6 +2595,7 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
     src, dst, tags = [], [], []
     # 逐帧收集点 —— 「多机位」路径要用它按镜头分组（见下面的 per-shot 分支）。
     per_frame: dict = {}
+    hoop_excluded = 0
     for fr in (req.frames or []):
         t = float(fr.get("t", 0.0))
         for name, xy in (fr.get("landmarks") or {}).items():
@@ -2580,6 +2608,16 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                 lab = xy.get("label")
                 xy = xy.get("value") or xy.get("xy")
             if not xy or len(xy) < 2:
+                continue
+            # ★ 篮筐**不参与地面标定**。
+            # 为什么：`hoop_*` 是篮圈中心的**地面投影**（y=±12.425），而界面提示
+            # 让用户「点篮圈的正中心」—— 篮圈离地 3.05m，**不在球场地面上**。
+            # 单应矩阵只能映射地面，把一个 3 米高的点按地面坐标塞进拟合，
+            # 必然是错的：实测用户那份标定里，去掉篮筐后两段的平均重投影误差
+            # 从 1.00m → **0.03m**、2.61m → **0.18m**（篮筐就是那个多余的点）。
+            # 篮筐有它自己的标法（「在画面上标篮筐」直接存画面坐标，不经过单应矩阵）。
+            if str(name).startswith("hoop"):
+                hoop_excluded += 1
                 continue
             src.append([float(xy[0]) * W, float(xy[1]) * H])
             dst.append(list(COURT_LANDMARKS[name]))
@@ -3192,12 +3230,15 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
                                    "ok": f_.get("ok"),
                                    "rmse_m": f_.get("rmse_m")}
                                   for f_ in per_frame_fit],
-                "note": ("这 %d 幅画面**混在一起解不了**（跨镜头没有统一坐标系，"
-                         "合并解必然互相矛盾 —— 这是拍摄方式决定的，不是你点错了），"
-                         "但它们**各自都能标定** —— 已按「每幅画面一份标定」处理："
-                         "每份覆盖自己的时间段，分析时按帧所属镜头取对应的那份，"
-                         "最后在球场坐标里合并。%s"
-                         % (len(_good2),
+                "note": _multical_note(_mc2, "这 %d 幅画面**混在一起解不了**"
+                                            "（跨镜头没有统一坐标系，"
+                                            "合并解必然互相矛盾 —— 这是拍摄方式决定的，"
+                                            "不是你点错了），"
+                                            "但它们**各自都能标定** —— "
+                                            "已按「每幅画面一份标定」处理："
+                                            "每份覆盖自己的时间段，分析时按帧所属镜头取"
+                                            "对应的那份，最后在球场坐标里合并。%s"
+                                      % (len(_good2),
                             "、".join("t=%.1fs %d点 误差%.2fm"
                                       % (f["t"], f["n"], f["rmse_m"])
                                       for f in _good2))),
@@ -3206,8 +3247,7 @@ async def post_calibrate_multi(req: MultiCalibRequest) -> Any:
     if blocked:
         if comp_note:
             blocked += "；" + comp_note
-        if getattr(req, "confirm", False):
-            raise HTTPException(400, blocked)
+        if getattr(req, "confirm", False):            raise HTTPException(400, blocked)
         return {"ok": False, "saved": False, "path": None, "rmse_m": round(rmse, 3),
                 "via": via, "note": blocked, "per_point": per_point, "worst": worst,
                 "n_points": len(src), "n_frames": n_frames,
@@ -3302,8 +3342,13 @@ COURT_LABELS = [
     # 实测教训：端线机位下用户根本判断不了"近端/远端"，而且球场关于中线对称，
     # 单张画面里镜像解与真解几何等价（误差都是 0.457m）→ 按近/远命名必然失败。
     # 改成"篮筐侧 / 中圈侧"后，用户只需看"这个点在篮筐那一头还是中圈那一头"。
-    {"name": "hoop_far", "label": "篮筐中心（画面里那个篮筐）",
-     "hint": "篮圈的正中心（不是篮板、不是支架）"},
+    # ⚠️ 「篮筐中心」**不在**球场标定清单里（曾经有，已移除）。
+    # 为什么必须移除：`hoop_*` 的真实坐标是篮圈中心的**地面投影**（y=±12.425），
+    # 而这里的提示让用户「点篮圈的正中心」—— 篮圈离地 3.05m，**不在球场地面上**。
+    # 单应矩阵只能映射地面，把一个 3 米高的点按地面坐标塞进拟合必然出错：
+    # 实测用户那份标定，去掉篮筐后两段的平均重投影误差从 1.00m → **0.03m**、
+    # 2.61m → **0.18m**（篮筐就是那个把整份标定拉偏的多余点）。
+    # 篮筐有自己的标法：「在画面上标篮筐」，直接存画面坐标，不走单应矩阵。
     {"name": "corner_far_left", "label": "底线左角（篮筐后面那条线）",
      "hint": "篮筐所在的那条底线，与左边线的交点"},
     {"name": "corner_far_right", "label": "底线右角（篮筐后面那条线）",
@@ -3332,8 +3377,6 @@ COURT_LABELS = [
      "hint": "中圈那一侧的底线，与左边线的交点（多半在画面外）"},
     {"name": "corner_near_right", "label": "底线右角（中圈那一头）",
      "hint": "中圈那一侧的底线，与右边线的交点（多半在画面外）"},
-    {"name": "hoop_near", "label": "另一端的篮筐中心",
-     "hint": "画面里看不到的那个篮筐（若只有一个篮筐可见就别选它）"},
     {"name": "arc_near", "label": "三分弧顶（中圈那一头）",
      "hint": "中圈那侧三分弧的最高点"},
 ]
@@ -3380,10 +3423,8 @@ async def _court_landmarks_legacy() -> Any:
          "hint": "靠近画面那侧的罚球线正中"},
         {"name": "ft_far", "label": "远端罚球线中点",
          "hint": "远处那侧的罚球线正中"},
-        {"name": "hoop_near", "label": "近端篮筐中心",
-         "hint": "靠近画面那个篮筐的篮圈正中心"},
-        {"name": "hoop_far", "label": "远端篮筐中心",
-         "hint": "远处那个篮筐的篮圈正中心"},
+        # 篮筐**不在这里**（见上面 COURT_LABELS 的说明）：篮圈离地 3.05m，
+        # 不在地面单应矩阵能映射的平面上，塞进拟合会把整份标定拉偏。
     ], "min_points": 4,
         "court": {"length_m": 28.0, "width_m": 15.0}}
 

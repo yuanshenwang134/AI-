@@ -55,19 +55,48 @@ def _make_video(path: Path) -> bool:
 
 
 def _payload(video: Path) -> dict:
-    # 5 个真实场地特征点（归一化坐标），铺得开、不共线
-    return {
-        "video_path": str(video),
-        "compensate": True,
-        "confirm": False,
-        "frames": [{"t": 0.5, "landmarks": {
-            "hoop_far": [0.36, 0.51],
-            "corner_far_left": [0.20, 0.72],
-            "corner_far_right": [0.65, 0.71],
-            "lane_far_left": [0.50, 0.81],
-            "arc_far": [0.76, 0.66],
-        }}],
-    }
+    """5 个真实场地特征点（归一化坐标），由单应矩阵**投影生成**，保证自洽。
+
+    为什么用投影生成而不是手写坐标（我踩过）：手写的点不是任何单应矩阵的投影，
+    5 个点会互相矛盾（实测 rmse 35~279m），解算直接被 RANSAC 拒掉，
+    测出来的是夹具自己的毛病。
+    ⚠️ 这里**不放篮筐**：篮圈离地 3.05m，单应矩阵只能映射地面，
+    把篮筐当球场地点标进去会把整份标定拉偏（实测去掉后误差 2.61m→0.18m）。
+    """
+    import numpy as np
+    from aihoop.court import find_homography
+    names = ["corner_far_left", "corner_far_right",
+             "lane_far_left", "lane_far_right", "arc_far"]
+    court = [list(api.COURT_LANDMARKS[n]) for n in names]
+    quad_px = [[128.0, 345.6], [800.0, 340.0], [900.0, 120.0], [60.0, 150.0]]
+    quad_m = [[-7.5, 14.0], [7.5, 14.0], [7.5, -14.0], [-7.5, -14.0]]
+    Hm = np.asarray(find_homography([list(p) for p in quad_px],
+                                    [list(p) for p in quad_m]), dtype=float)
+    Hinv = np.linalg.inv(Hm)                 # 球场 -> 像素（别忘取逆）
+    lms = {}
+    for n, (x, y) in zip(names, court):
+        q = Hinv @ np.array([float(x), float(y), 1.0])
+        u, v = float(q[0] / q[2]), float(q[1] / q[2])
+        lms[n] = [u / 1280.0, v / 720.0]
+    return {"video_path": str(video), "compensate": True, "confirm": False,
+            "frames": [{"t": 0.5, "landmarks": lms}]}
+
+
+def test_hoop_is_excluded_from_court_fit():
+    """篮筐**不许**参与地面标定：它离地 3.05m，不属于地面单应矩阵。
+
+    实测（用户那份真实标定）：把篮筐算进去，两段的平均重投影误差是
+    1.00m / 2.61m；**去掉它之后是 0.03m / 0.18m** —— 它就是那个多余的点。
+    用户是被界面提示「点篮圈的正中心」误导的，所以工具这边必须挡住。
+    """
+    import inspect
+    src = inspect.getsource(api.post_calibrate_multi)
+    assert 'str(name).startswith("hoop")' in src, \
+        "解算前必须跳过 hoop_* 地标（否则用户点了篮筐就会把标定拉偏）"
+    # 界面上也**不该再列出**篮筐
+    names = [d["name"] for d in api.COURT_LABELS]
+    assert not [n for n in names if n.startswith("hoop")], \
+        "球场标定清单里不能再有篮筐：%s" % [n for n in names if n.startswith("hoop")]
 
 
 def test_calibrate_multi_returns_result_instead_of_500():

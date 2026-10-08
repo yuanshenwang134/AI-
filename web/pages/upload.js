@@ -60,8 +60,11 @@ window.PAGES['upload'] = {
       courtSide: 'full',      // 默认显示全场地标；也能临时筛选一个半场
       // left/right 旧列表保留兼容；新流程用 full 的 A/B 端坐标。
       courtSideNames: {
+        // ⚠️ 这三份清单里**都没有「篮筐中心」**（曾经有，已移除）。
+        // 篮圈离地 3.05m，而单应矩阵只能映射地面 —— 把篮筐当球场地点标进去
+        // 会把整份标定拉偏（实测去掉它：两段误差 1.00m→0.03m、2.61m→0.18m）。
+        // 篮筐请用「在画面上标篮筐」，那条路直接存画面坐标，不走单应矩阵。
         left: [
-          { name: 'hoop_near', label: '篮筐中心' },
           { name: 'corner_near_left', label: '底线左角' },
           { name: 'corner_near_right', label: '底线右角' },
           { name: 'lane_near_left', label: '罚球区左角' },
@@ -70,7 +73,6 @@ window.PAGES['upload'] = {
           { name: 'arc_near', label: '三分弧顶' }
         ],
         right: [
-          { name: 'hoop_far', label: '篮筐中心' },
           { name: 'corner_far_left', label: '底线左角' },
           { name: 'corner_far_right', label: '底线右角' },
           { name: 'lane_far_left', label: '罚球区左角' },
@@ -81,7 +83,10 @@ window.PAGES['upload'] = {
         full: [
           { name: 'corner_far_left', label: 'A端底线左角', dst: [-7.5, 14.0], hint: 'A端篮筐后，底线与左边线交点' },
           { name: 'corner_far_right', label: 'A端底线右角', dst: [7.5, 14.0], hint: 'A端篮筐后，底线与右边线交点' },
-          { name: 'hoop_far', label: 'A端篮筐中心', dst: [0.0, 12.425], hint: 'A端篮圈正中心（A端就是你选定的一个篮筐）' },
+          // ⚠️ 「A端篮筐中心」**已从这里移除**：篮圈离地 3.05m，不在球场地面上，
+          // 而单应矩阵只能映射地面 —— 把它当球场地点标进去会把整份标定拉偏
+          // （实测：去掉它，两段平均重投影误差 1.00m→0.03m、2.61m→0.18m）。
+          // 篮筐请用上面的「在画面上标篮筐」，那条路直接存画面坐标，不走单应矩阵。
           { name: 'lane_far_left', label: 'A端罚球区左角', dst: [-2.45, 8.2], hint: 'A端罚球线左端与罚球区边线交点' },
           { name: 'ft_far', label: 'A端罚球线中点', dst: [0.0, 8.2], hint: 'A端罚球线正中，罚球时站的那条线' },
           { name: 'lane_far_right', label: 'A端罚球区右角', dst: [2.45, 8.2], hint: 'A端罚球线右端与罚球区边线交点' },
@@ -94,8 +99,8 @@ window.PAGES['upload'] = {
           { name: 'lane_near_right', label: 'B端罚球区右角', dst: [2.45, -8.2], hint: 'B端罚球线右端与罚球区边线交点' },
           { name: 'arc_near', label: 'B端三分弧顶', dst: [0.0, -5.675], hint: 'B端三分弧正对篮筐的最高点' },
           { name: 'corner_near_left', label: 'B端底线左角', dst: [-7.5, -14.0], hint: 'B端篮筐后，底线与左边线交点' },
-          { name: 'corner_near_right', label: 'B端底线右角', dst: [7.5, -14.0], hint: 'B端篮筐后，底线与右边线交点' },
-          { name: 'hoop_near', label: 'B端篮筐中心', dst: [0.0, -12.425], hint: '另一端篮圈正中心' }
+          { name: 'corner_near_right', label: 'B端底线右角', dst: [7.5, -14.0], hint: 'B端篮筐后，底线与右边线交点' }
+          // 「B端篮筐中心」同样已移除（理由见上面 A端 那段注释）
         ]
       },
       mfFrames: [],           // 抽出来的画面 [{t,image,w,h}]
