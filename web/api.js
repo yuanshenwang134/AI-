@@ -268,8 +268,9 @@
   API.getJob = function (id) {
     return API.getJSON(API.base + '/api/jobs/' + encodeURIComponent(id));
   };
-  API.listJobs = function () {
-    return API.getJSON(API.base + '/api/jobs', 5000);
+  API.listJobs = function (includeSynthetic) {
+    return API.getJSON(API.base + '/api/jobs' +
+      (includeSynthetic ? '?include_synthetic=true' : ''), 5000);
   };
 
   /**

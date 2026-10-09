@@ -33,6 +33,7 @@ window.PAGES['tactics'] = {
       courtSVG: window.Court.courtSVG({ view: 'half' }),
       loading: false,
       err: '',
+      _loadPromise: null,
       // 播放器
       altJobs: [],          // 其它「有战术数据」的任务（空状态下一键切换）
       playing: false,
@@ -214,20 +215,69 @@ window.PAGES['tactics'] = {
     // ---- 数据加载 ----
     load: function () {
       var self = this;
-      if (self.S.tacticsLoaded) return Promise.resolve();
+      if (self._loadPromise) return self._loadPromise;
       self.loading = true;
-      return window.APP_TACTICS().then(function () {
+      var requestedJobId = '';
+      // 每次进页都针对当前选中任务刷新战术产物，避免首次进入时拿到
+      // bootstrap 前的演示数据或上一个任务缓存。延后一微任务，让根组件先启动 bootstrap。
+      var request = Promise.resolve().then(function () {
+        return window.APP_WAIT_READY ? window.APP_WAIT_READY() : null;
+      }).then(function () {
+        requestedJobId = self.S.jobId;
+        return window.APP_TACTICS(true);
+      }).then(function () {
+        // The default job can be a completed video task with no tactical
+        // artifacts even while newer/other completed jobs have them. On the
+        // first visit, select the newest usable job so the page shows a result
+        // without requiring the user to leave and reopen the tab.
+        if (!self.hasTactics && self.S.backendOk) {
+          return window.API.listJobs(true).then(function (list) {
+            var arr = Array.isArray(list) ? list : (list && list.jobs) || [];
+            var candidates = arr.filter(function (j) {
+              return j.status === 'done' && j.job_id !== self.S.jobId;
+            });
+            // The job-list has_tactics flag can be stale (or absent on older
+            // servers), so verify candidates against the actual tactics API.
+            // Try flagged jobs first, then inspect the remaining completed jobs.
+            candidates.sort(function (a, b) {
+              return Number(!!b.has_tactics) - Number(!!a.has_tactics);
+            });
+            function tryCandidate(index) {
+              if (index >= candidates.length) return null;
+              var candidate = candidates[index];
+              return window.API.tactics(candidate.job_id).then(function (data) {
+                if (!data || !data.available) return tryCandidate(index + 1);
+                return window.APP_LOAD_JOB(candidate.job_id).then(function () {
+                  requestedJobId = self.S.jobId;
+                  return window.APP_TACTICS(true);
+                });
+              }).catch(function () { return tryCandidate(index + 1); });
+            }
+            return tryCandidate(0);
+          });
+        }
+      }).then(function () {
         self.loading = false;
+        // 任务可能在请求过程中切换。丢弃旧任务结果并跟进新 ID，不能把旧空状态
+        // 留在当前页面，逼用户离开再进一次。
+        if (requestedJobId !== self.S.jobId) {
+          self._loadPromise = null;
+          return self.load();
+        }
         if (!self.hasTactics && self.S.backendOk) self.loadAltJobs();
       }).catch(function (e) {
         self.loading = false;
         self.err = String((e && e.message) || e);
+      }).finally(function () {
+        self._loadPromise = null;
       });
+      self._loadPromise = request;
+      return request;
     },
     /** 后端连着但这一场没有战术数据时，列出"有战术数据"的任务供一键切换。 */
     loadAltJobs: function () {
       var self = this;
-      return window.API.listJobs().then(function (list) {
+      return window.API.listJobs(true).then(function (list) {
         var arr = Array.isArray(list) ? list : (list && list.jobs) || [];
         self.altJobs = arr.filter(function (j) {
           return j.status === 'done' && j.has_tactics && j.job_id !== self.S.jobId;
@@ -311,6 +361,12 @@ window.PAGES['tactics'] = {
     },
     step: function (d) { this.seek(Math.max(0, Math.min(this.duration, this.playT + d))); }
   },
+  watch: {
+    // bootstrap 或用户在本页切换任务时，刷新对应任务的战术结果。
+    'S.jobId': function (id, oldId) {
+      if (id && id !== oldId) this.load();
+    }
+  },
   mounted: function () {
     this.load();
   },
@@ -325,7 +381,11 @@ window.PAGES['tactics'] = {
     '    <div class="page-sub">控球归属 → 传球网络 → 阵型识别 → 空间指标；俯视战术图可逐帧回放。</div>',
     '  </div>',
 
-    '  <el-skeleton v-if="loading" :rows="6" animated />',
+    '  <div v-if="loading" class="card">',
+    '    <el-alert type="info" :closable="false" show-icon',
+    '      title="战术分析已打开，正在载入当前任务的战术图与逐帧数据" />',
+    '    <el-skeleton :rows="6" animated />',
+    '  </div>',
 
     '  <el-alert v-else-if="!hasTactics" type="warning" :closable="false" show-icon',
     '            title="本场没有战术数据">',

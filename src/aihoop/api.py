@@ -287,6 +287,16 @@ def _run_job(job_id: str, req: JobCreate) -> None:
                     _raw = json.loads(cal_path.read_text(encoding="utf-8")) or {}
                     multi_cal = MultiCal.from_dict(_raw)
                     if multi_cal is not None:
+                        # MultiCal.from_dict also upgrades legacy segments that
+                        # fitted the raised hoop center as a court point. Keep the
+                        # representative Calibration in sync with that repaired H;
+                        # otherwise the global validity/degeneracy checks below
+                        # would still inspect the stale top-level matrix.
+                        primary = multi_cal.primary
+                        if primary is not None:
+                            cal = primary.calibration(
+                                for_video=multi_cal.for_video,
+                                frame_size=multi_cal.frame_size)
                         _update(st, message="多机位标定：%d 个镜头各自一份标定"
                                             % len(multi_cal.segments))
                 except Exception as e:                       # noqa: BLE001

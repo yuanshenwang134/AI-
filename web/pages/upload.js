@@ -1121,17 +1121,29 @@ window.PAGES['upload'] = {
     /** 用一份 H 把球场线投影到画面像素坐标 */
     _buildOverlay: function (H, W, Hh) {
       if (!H || !W || !Hh) { this.overlayLines = []; return; }
+      // 标定 H 的方向是「像素 → 球场米」（dst ≈ H × src）。
+      // 叠加层需要反向把球场坐标投回像素，不能直接拿 H 去乘球场点。
+      var a = H[0][0], b = H[0][1], c = H[0][2];
+      var d = H[1][0], e = H[1][1], f = H[1][2];
+      var g = H[2][0], h = H[2][1], i = H[2][2];
+      var det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+      if (!isFinite(det) || Math.abs(det) < 1e-12) { this.overlayLines = []; return; }
+      var inv = [
+        [(e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det],
+        [(f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det],
+        [(d * h - e * g) / det, (b * g - a * h) / det, (a * e - b * d) / det]
+      ];
       var out = [];
       this._courtPolylines().forEach(function (line) {
         var pix = [];
         line.forEach(function (p) {
           var x = p[0], y = p[1];
-          var w = H[2][0] * x + H[2][1] * y + H[2][2];
+          var w = inv[2][0] * x + inv[2][1] * y + inv[2][2];
           if (Math.abs(w) < 1e-9) return;
-          var u = (H[0][0] * x + H[0][1] * y + H[0][2]) / w;
-          var v = (H[1][0] * x + H[1][1] * y + H[1][2]) / w;
+          var u = (inv[0][0] * x + inv[0][1] * y + inv[0][2]) / w;
+          var v = (inv[1][0] * x + inv[1][1] * y + inv[1][2]) / w;
           // 只留画面附近的点，避免远处投影飞出去把 SVG 撑爆
-          if (u > -W || u < 2 * W) pix.push([u, v]);
+          if (u > -W && u < 2 * W && v > -Hh && v < 2 * Hh) pix.push([u, v]);
         });
         if (pix.length > 1) out.push(pix);
       });

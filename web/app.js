@@ -14,9 +14,10 @@
 (function () {
   'use strict';
 
-  // 全局数据状态：各页面组件直接读写这个对象（Vue 3 对普通对象做只读读取即可，
-  // 需要响应式的字段都通过 root 的 reactive 版本暴露，见下方 state）
-  var STATE = {
+  // Async loaders and pages both write this object. Keep the shared reference
+  // itself reactive: mutating the raw object behind a Vue proxy does not notify
+  // mounted pages, which made first-visit results appear only after remount.
+  var STATE = Vue.reactive({
     backendOk: false,
     demoMode: true,
     jobId: '',
@@ -34,12 +35,12 @@
     charts: {},          // 页面里创建过的 ECharts 实例（切换页面时统一 resize）
     loading: false,
     notice: ''
-  };
+  });
   window.STATE = STATE;
 
-  // Vue 响应式代理：各页面在 computed 里读 window.STORE.xxx 即可自动刷新
-  // （app.js 与 api.js 内部仍直接写 STATE，两者共享同一份底层数据）
-  var STORE = Vue.reactive(STATE);
+  // Keep the legacy STORE name for page components; both names must point at
+  // the proxy so writes through either reference trigger Vue updates.
+  var STORE = STATE;
   window.STORE = STORE;
 
   // 菜单即路由表：group 决定在左侧栏归到哪一段（首页 / 分析流程 / 结果与产出）。
@@ -153,9 +154,11 @@
   STATE.applyGame = applyGame;
 
   /** 统一入口：优先后端，失败自动降级到 demo */
+  var bootstrapPromise = null;
   function bootstrap() {
+    if (bootstrapPromise) return bootstrapPromise;
     STATE.loading = true;
-    return window.API.probe().then(function (ok) {
+    var run = window.API.probe().then(function (ok) {
       STATE.backendOk = ok;
       if (ok) {
         // 后端可用：取最近任务里最新的 done 任务作为默认展示对象
@@ -173,9 +176,17 @@
     }).catch(function (e) {
       STATE.backendOk = false;
       return loadFromDemo();
-    }).then(function () {
-      STATE.loading = false;
     });
+    bootstrapPromise = run.then(function (value) {
+      STATE.loading = false;
+      bootstrapPromise = null;
+      return value;
+    }, function (error) {
+      STATE.loading = false;
+      bootstrapPromise = null;
+      throw error;
+    });
+    return bootstrapPromise;
   }
 
   /**
@@ -200,8 +211,15 @@
    * web/demo/tactics.json；真实模式下直接把 available=false 交给页面去提示。
    */
   function loadTactics(force) {
+    // Initial child mount can happen just before the root starts bootstrapping.
+    // If bootstrap is already in flight, wait for its selected job before fetching
+    // tactics so the first visit cannot accidentally cache demo/previous-job data.
+    if (bootstrapPromise) {
+      return bootstrapPromise.then(function () { return loadTactics(true); });
+    }
     if (STATE.tacticsLoaded && !force) return Promise.resolve(STATE.tactics);
     var A = window.API;
+    var requestedJobId = STATE.jobId;
     function fromDemo() {
       return Promise.all([A.demoTactics(), A.demoTacticsFrames()])
         .then(function (r) {
@@ -218,6 +236,9 @@
         A.tactics(STATE.jobId).catch(function () { return null; }),
         A.tacticsFrames(STATE.jobId).catch(function () { return null; })
       ]).then(function (r) {
+        // The user may switch jobs while the two requests are in flight. Never
+        // publish that older response as the current game's tactics.
+        if (requestedJobId !== STATE.jobId) return loadTactics(true);
         STATE.tactics = r[0] || { available: false, reason: '后端没有返回战术数据' };
         STATE.tacticsFrames = r[1] || { available: false, frames: [] };
       });
@@ -261,6 +282,14 @@
       }
     },
     methods: {
+      /** 菜单点击时同步切页，不等浏览器异步派发 hashchange。 */
+      navigate: function (key) {
+        if (!window.PAGES[key]) key = 'home';
+        this.route = key;
+        this.currentPage = window.PAGES[key];
+        var hash = '#/' + key;
+        if (location.hash !== hash) location.hash = hash;
+      },
       /** 从 location.hash 解析当前页（#/shotchart -> window.PAGES['shotchart']） */
       syncRoute: function () {
         var key = (location.hash || '').replace(/^#\/?/, '').split('?')[0] || 'home';
@@ -348,9 +377,15 @@
   app.component('court-view', window.COMPONENTS['court-view']);
   app.component('stat-compare', window.COMPONENTS['stat-compare']);
   app.component('big-scoreboard', window.COMPONENTS['big-scoreboard']);
-  app.mount('#app');
 
+  // 页面子组件会在 app.mount() 的首次渲染中运行 mounted 钩子。
+  // 必须先暴露懒加载入口，否则直接打开 #/tactics 时子组件会抢先调用，
+  // 导致第一次进入无声失败、离开再点一次才加载。
   window.APP_BOOTSTRAP = bootstrap;
   window.APP_LOAD_JOB = loadJob;
   window.APP_TACTICS = loadTactics;
+  window.APP_WAIT_READY = function () {
+    return bootstrapPromise || Promise.resolve();
+  };
+  app.mount('#app');
 })();

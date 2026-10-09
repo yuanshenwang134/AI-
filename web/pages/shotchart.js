@@ -245,6 +245,20 @@ window.PAGES['shotchart'] = {
     // 分区热力只定义在半场（分区口径基于到篮筐距离），选分区时自动回到半场视图
     layer: function (v) { if (v === 'zones') this.view = 'half'; }
   },
+  mounted: function () {
+    var self = this;
+    // Refresh on entry so the first visit after switching/finishing a job cannot
+    // render a previous task's shot chart from the shared app store.
+    Promise.resolve().then(function () {
+      return window.APP_WAIT_READY ? window.APP_WAIT_READY() : null;
+    }).then(function () {
+      var id = self.S.jobId;
+      if (!self.S.backendOk || !id) return null;
+      return window.API.shotchart(id).then(function (chart) {
+        if (self.S.jobId === id && chart) self.S.shotchart = chart;
+      });
+    }).catch(function () {});
+  },
   template: [
     '<div>',
     // 标定不适用 → 后端不出热区。这里必须明说原因，不能只给空图。
@@ -252,7 +266,7 @@ window.PAGES['shotchart'] = {
     '    <h3 class="card-title">投篮热区 <span class="sub">不适用</span></h3>',
     '    <el-alert type="warning" :closable="false" show-icon',
     '      title="这段视频没有可用的球场标定，无法生成投篮热区"',
-    '      :description="unavailableReason + \'\\n\\n\' +',
+    '      :description="unavailableReason + \'\\n\\n\' + emptyWhy + \'\\n\\n\' +',
     '        \'（宁可不画，也不画错的：球场坐标整片错位时，热区图看起来正常但全是垃圾。\' +',
     '        \'要出热区请先用 calibrate 对这段视频做球场标定。）\'" />',
     '  </div>',

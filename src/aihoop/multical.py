@@ -70,16 +70,46 @@ class Segment:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Segment":
+        src = list(d.get("src_px") or [])
+        dst = list(d.get("dst_m") or [])
+        names = list(d.get("names") or [])
+        H = d.get("H") or []
+        rmse = float(d.get("rmse_m") or 0.0)
+        note = d.get("note") or ""
+
+        # Older web calibration files included the hoop center among ground-plane
+        # landmarks. It is 3.05m above the court, so that correspondence bends the
+        # homography badly (often visible as players collapsing into a corner after
+        # a camera cut). Drop those legacy points and rebuild H from the remaining
+        # ground points when there are enough correspondences.
+        if names and len(names) == len(src) == len(dst) and any(
+                str(name).startswith("hoop") for name in names):
+            keep = [j for j, name in enumerate(names)
+                    if not str(name).startswith("hoop")]
+            if len(keep) >= 4:
+                src = [src[j] for j in keep]
+                dst = [dst[j] for j in keep]
+                names = [names[j] for j in keep]
+                try:
+                    from .court import apply_homography, find_homography
+                    H = find_homography(src, dst)
+                    errors = []
+                    for (px, py), (x, y) in zip(src, dst):
+                        u, v = apply_homography(H, float(px), float(py))
+                        errors.append(((u - float(x)) ** 2 + (v - float(y)) ** 2) ** 0.5)
+                    rmse = sum(errors) / len(errors)
+                    note = (note + "; " if note else "") + \
+                        "legacy hoop landmark removed; ground-plane H rebuilt"
+                except (ValueError, ZeroDivisionError):
+                    pass
+
         return cls(t_start=float(d.get("t_start") or 0.0),
                    t_end=float(d.get("t_end") or 0.0),
-                   src_px=d.get("src_px") or [], dst_m=d.get("dst_m") or [],
-                   H=d.get("H") or [], frame=d.get("frame") or "full",
-                   names=d.get("names") or [],
-                   rmse_m=float(d.get("rmse_m") or 0.0),
+                   src_px=src, dst_m=dst, H=H, frame=d.get("frame") or "full",
+                   names=names, rmse_m=rmse,
                    ratio=float(d.get("ratio") or 0.0),
                    method=d.get("method") or "web-keypoints-multi",
-                   n_points=int(d.get("n_points") or 0),
-                   note=d.get("note") or "")
+                   n_points=len(src), note=note)
 
 
 class MultiCal:
